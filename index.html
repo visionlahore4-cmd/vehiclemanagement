@@ -1234,6 +1234,44 @@
   </div>
 </div>
 
+<!-- Token Tax Add Vehicle Modal -->
+<div class="modal-overlay" id="tokenTaxModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="tokenTaxModalTitle">Add Vehicle (Token Tax)</h2>
+      <button class="modal-close" onclick="closeModal('tokenTaxModal')">✕</button>
+    </div>
+    <form id="tokenTaxForm" class="modal-form">
+      <div class="form-group">
+        <label>Vehicle No (Plate)</label>
+        <input type="text" id="ttPlate" required placeholder="e.g. ABC-123" />
+      </div>
+      <div class="form-group">
+        <label>Assign Name</label>
+        <input type="text" id="ttAssignName" required placeholder="e.g. Sales Dept" />
+      </div>
+      <div class="form-group">
+        <label>Token Status</label>
+        <select id="ttStatus" required>
+          <option value="Paid">Paid</option>
+          <option value="Unpaid">Unpaid</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Start Date</label>
+        <input type="date" id="ttStartDate" required />
+      </div>
+      <div class="form-group">
+        <label>Expiry Date</label>
+        <input type="date" id="ttExpiryDate" required />
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('tokenTaxModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save Vehicle</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- Allotment Modal -->
 <div class="modal-overlay" id="allotmentModal">

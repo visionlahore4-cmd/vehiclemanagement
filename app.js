@@ -316,13 +316,13 @@ function renderTokenTax() {
         <td><code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:0.8rem;">${v.plate || '-'}</code></td>
         <td><strong>${v.name || '-'}</strong></td>
         <td>${v.type || '-'}</td>
-        <td><strong>${ccVal > 0 ? ccVal + ' CC' : v.power || '-'}</strong></td>
-        <td><span class="dept-pill dept-${vDept || 'general'}">${deptLabel}</span></td>
-        <td>${v.etag ? '<span class="status-badge active" style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">✅ Renewed</span>' : '<span style="color:var(--text-muted);font-size:0.75rem;">—</span>'}</td>
-        <td>${v.envTag ? '<span class="status-badge active" style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">✅ Active</span>' : '<span style="color:var(--text-muted);font-size:0.75rem;">—</span>'}</td>
+        <td><strong>${v.designation || '-'}</strong></td>
+        <td><span class="status-badge ${v.tokenStatus === 'Paid' ? 'active' : 'inactive'}" style="padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">${v.tokenStatus || 'Unpaid'}</span></td>
+        <td>${v.tokenStartDate || '-'}</td>
+        <td>${v.tokenExpiryDate || '-'}</td>
       </tr>
     `;
-  }).join('') : `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-muted);">No vehicles above 1000 CC found</td></tr>`;
+  }).join('') : `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-muted);">No Token Tax records found</td></tr>`;
 }
 function fmtPKR(n) { return 'PKR ' + Number(n).toLocaleString('en-PK'); }
 
@@ -1084,6 +1084,11 @@ function drawTypeChart() {
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+function openTokenTaxModal() {
+  document.getElementById('tokenTaxForm').reset();
+  openModal('tokenTaxModal');
+}
+
 function populateVehicleDriverSelect(selectedId) {
   const sel = document.getElementById('vehicleDriver');
   sel.innerHTML = '<option value="">— Unassigned —</option>' +
@@ -1140,6 +1145,30 @@ function openEditVehicle(id) {
   populateVehicleDriverSelect(v.driver);
   openModal('vehicleModal');
 }
+document.getElementById('tokenTaxForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = {
+    id: uid(),
+    plate: document.getElementById('ttPlate').value.trim(),
+    name: 'Token Tax Record',
+    type: 'N/A',
+    power: '1001 CC', // to bypass the > 1000cc filter in renderTokenTax
+    designation: document.getElementById('ttAssignName').value.trim(),
+    tokenStatus: document.getElementById('ttStatus').value,
+    tokenStartDate: document.getElementById('ttStartDate').value,
+    tokenExpiryDate: document.getElementById('ttExpiryDate').value,
+    status: 'Active',
+    year: new Date().getFullYear(),
+    driver: '',
+    color: 'N/A', chassis: 'N/A', engine: 'N/A', insurance: 'N/A', etag: false, envTag: false, dept: 'general'
+  };
+  state.vehicles.push(v);
+  saveState();
+  renderTokenTax();
+  closeModal('tokenTaxModal');
+  showToast('Token Tax Vehicle added!', 'success');
+});
+
 document.getElementById('vehicleForm').addEventListener('submit', e => {
   e.preventDefault();
   const vehicle = {
