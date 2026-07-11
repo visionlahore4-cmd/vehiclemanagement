@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VehicleHub – Vehicle Management System</title>
+  <meta name="description" content="A modern vehicle management system to track, manage and monitor your entire fleet with ease." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+
+<!-- Login Screen Overlay -->
+<div id="loginScreen" class="login-overlay">
+  <div class="login-box">
+    <img src="logo.jpg" alt="Logo" style="width: 70px; height: 70px; border-radius: 12px; object-fit: cover; margin-bottom: 20px; box-shadow: 0 0 15px rgba(255,255,255,0.2);" />
+    <h2 id="loginCompanyTitle">Vision Food &amp; Packaging</h2>
+    <p>Sign in to access Fleet Management System</p>
+    <form id="loginForm">
+      <div class="form-group" style="margin-bottom: 15px; text-align: left;">
+        <label style="color: #fff; font-size: 0.85rem;">Username</label>
+        <input type="text" id="loginUsername" placeholder="Enter username" required style="width:100%; padding:10px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:#fff;" />
+      </div>
+      <div class="form-group" style="margin-bottom: 20px; text-align: left;">
+        <label style="color: #fff; font-size: 0.85rem;">Password</label>
+        <input type="password" id="loginPassword" placeholder="Enter password" required style="width:100%; padding:10px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:#fff;" />
+      </div>
+      <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; background: var(--accent); border: none; font-weight: 700;">Login</button>
+      <div id="loginError" style="color: #ff4d4d; font-size: 0.85rem; margin-top: 10px; display: none;">Invalid username or password!</div>
+    </form>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo" style="flex-direction: row; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--border);">
+    <img src="logo.jpg" alt="Logo" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; box-shadow: 0 0 10px rgba(108,99,255,0.3);" />
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span class="logo-text" id="sidebarCompanyName" style="font-size: 0.95rem; line-height: 1.2; font-weight: 700; color: var(--text);">Vision Food &amp; Packaging</span>
+      <span id="sidebarCompanyCity" style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px;">Lahore</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="#" class="nav-item active" data-page="dashboard" id="nav-dashboard">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">Dashboard</span>
+    </a>
+    <a href="#" class="nav-item" data-page="vehicles" id="nav-vehicles">
+      <span class="nav-icon">🚙</span>
+      <span class="nav-label">Total Vehicles</span>
+      <span class="dept-count-badge" id="sidebar-total-vehicles-count" style="margin-left: auto;">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="bikes" id="nav-bikes">
+      <span class="nav-icon">🏍️</span>
+      <span class="nav-label">Bikes</span>
+      <span class="dept-count-badge" id="sidebar-bikes-count" style="margin-left: auto;">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="drivers" id="nav-drivers">
+      <span class="nav-icon">👤</span>
+      <span class="nav-label">Drivers</span>
+    </a>
+    <a href="#" class="nav-item" data-page="maintenance" id="nav-maintenance">
+      <span class="nav-icon">🔧</span>
+      <span class="nav-label">Maintenance</span>
+    </a>
+    <a href="#" class="nav-item" data-page="fuel" id="nav-fuel">
+      <span class="nav-icon">⛽</span>
+      <span class="nav-label">Fuel Log</span>
+    </a>
+    <a href="#" class="nav-item" data-page="bills" id="nav-bills">
+      <span class="nav-icon">🧾</span>
+      <span class="nav-label">Bill View</span>
+    </a>
+    <a href="#" class="nav-item" data-page="reports" id="nav-reports">
+      <span class="nav-icon">📈</span>
+      <span class="nav-label">Reports</span>
+    </a>
+    <a href="#" class="nav-item" data-page="tokentax" id="nav-tokentax">
+      <span class="nav-icon">🎟️</span>
+      <span class="nav-label">Token &amp; Tax</span>
+      <span class="dept-count-badge" id="sidebar-tokentax-count" style="margin-left: auto;">0</span>
+    </a>
+
+    <a href="#" class="nav-item" data-page="settings" id="nav-settings">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">Settings</span>
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-avatar">A</div>
+    <div class="user-info">
+      <span class="user-name">Admin</span>
+      <span class="user-role">Fleet Manager</span>
+    </div>
+  </div>
+</aside>
+
+<!-- Main Content -->
+<div class="main-wrapper">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle Menu">☰</button>
+    <div class="topbar-title" id="topbarTitle">Dashboard</div>
+    <div class="topbar-actions">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="globalSearch" placeholder="Search vehicles, drivers…" />
+      </div>
+      <button class="btn-notif" id="notifBtn" title="Notifications">
+        🔔
+        <span class="notif-badge" id="notifBadge">3</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Pages -->
+  <main class="page-content">
+
+    <!-- ─── DASHBOARD ─── -->
+    <section class="page active" id="page-dashboard">
+      <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div>
+          <h1 style="font-size:1.8rem; font-weight:800; color:var(--text); margin-bottom:4px;">Fleet Command Center</h1>
+          <p class="page-sub" style="font-size:0.95rem; color:var(--text-muted);">Real-time overview of your fleet operations</p>
+        </div>
+        <div class="quick-actions" style="display:flex; gap:12px;">
+          <button class="btn-primary" onclick="document.getElementById('nav-vehicles').click(); setTimeout(()=>document.getElementById('addVehicleBtn').click(),100);" style="background:linear-gradient(135deg, #4f46e5, #6366f1); border:none; box-shadow:0 4px 15px rgba(79,70,229,0.3); padding:10px 18px; border-radius:8px;">+ Add Vehicle</button>
+          <button class="btn-primary" onclick="document.getElementById('nav-fuel').click(); setTimeout(()=>document.getElementById('addFuelBtn').click(),100);" style="background:linear-gradient(135deg, #10b981, #059669); border:none; box-shadow:0 4px 15px rgba(16,185,129,0.3); padding:10px 18px; border-radius:8px;">⛽ Log Fuel</button>
+        </div>
+      </div>
+
+      <!-- Advanced Stats Cards -->
+      <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:20px; margin-bottom:30px;">
+        <!-- Total Vehicles -->
+        <div class="stat-card" style="background:linear-gradient(135deg, #1e293b, #0f172a); color:#fff; padding:24px; border-radius:16px; box-shadow:0 10px 25px rgba(0,0,0,0.1); border:1px solid rgba(255,255,255,0.1); position:relative; overflow:hidden;">
+          <div style="position:absolute; top:-20px; right:-20px; font-size:6rem; opacity:0.05;">🚙</div>
+          <div style="font-size:0.9rem; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Total Fleet Size</div>
+          <div style="font-size:2.5rem; font-weight:800; margin-bottom:8px;" id="stat-total">0</div>
+          <div style="font-size:0.85rem; color:#38bdf8;">Across all departments</div>
+        </div>
+        <!-- Active Bikes -->
+        <div class="stat-card" style="background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; padding:24px; border-radius:16px; box-shadow:0 10px 25px rgba(37,99,235,0.2); position:relative; overflow:hidden;">
+          <div style="position:absolute; top:-20px; right:-20px; font-size:6rem; opacity:0.1;">🏍️</div>
+          <div style="font-size:0.9rem; color:#bfdbfe; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Company Bikes</div>
+          <div style="font-size:2.5rem; font-weight:800; margin-bottom:8px;" id="stat-bikes">0</div>
+          <div style="font-size:0.85rem; color:#eff6ff;">Total registered bikes</div>
+        </div>
+        <!-- Monthly Fuel Cost -->
+        <div class="stat-card" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; padding:24px; border-radius:16px; box-shadow:0 10px 25px rgba(16,185,129,0.2); position:relative; overflow:hidden;">
+          <div style="position:absolute; top:-20px; right:-20px; font-size:6rem; opacity:0.1;">⛽</div>
+          <div style="font-size:0.9rem; color:#a7f3d0; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Fuel Cost (This Month)</div>
+          <div style="font-size:2rem; font-weight:800; margin-bottom:8px;" id="stat-fuel-cost">PKR 0</div>
+          <div style="font-size:0.85rem; color:#ecfdf5;">Total fleet consumption</div>
+        </div>
+        <!-- Pending Maintenance -->
+        <div class="stat-card" style="background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; padding:24px; border-radius:16px; box-shadow:0 10px 25px rgba(245,158,11,0.2); position:relative; overflow:hidden;">
+          <div style="position:absolute; top:-20px; right:-20px; font-size:6rem; opacity:0.1;">🔧</div>
+          <div style="font-size:0.9rem; color:#fde68a; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Pending Maintenance</div>
+          <div style="font-size:2.5rem; font-weight:800; margin-bottom:8px;" id="stat-maintenance">0</div>
+          <div style="font-size:0.85rem; color:#fffbeb;">Requires attention</div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="charts-row" style="display:grid; grid-template-columns:1fr 2fr; gap:20px; margin-bottom:30px;">
+        <div class="chart-card" style="background:var(--card); padding:24px; border-radius:16px; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid var(--border); display:flex; flex-direction:column;">
+          <h3 style="margin:0 0 20px 0; color:var(--text); font-size:1.1rem; font-weight:700;">Fleet Distribution</h3>
+          <div style="flex:1; position:relative;">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card" style="background:var(--card); padding:24px; border-radius:16px; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid var(--border); display:flex; flex-direction:column;">
+          <h3 style="margin:0 0 20px 0; color:var(--text); font-size:1.1rem; font-weight:700;">Fuel Consumption Trend (Last 6 Months)</h3>
+          <div style="flex:1; position:relative;">
+            <canvas id="fuelChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Vehicles -->
+      <div class="section-card" style="background:var(--card); padding:24px; border-radius:16px; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid var(--border);">
+        <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <h3 style="margin:0; color:var(--text); font-size:1.2rem; font-weight:700;">Recent Vehicles</h3>
+          <button class="btn-link" onclick="navigate('vehicles')" style="background:none; border:none; color:var(--accent); font-weight:600; cursor:pointer;">View All →</button>
+        </div>
+        <div class="table-wrap" style="overflow-x:auto;">
+          <table class="data-table" id="dashRecentTable" style="width:100%; border-collapse:collapse; text-align:left;">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border); color:var(--text-muted); font-size:0.9rem;">
+                <th style="padding:12px 8px;">Vehicle</th>
+                <th style="padding:12px 8px;">Plate No.</th>
+                <th style="padding:12px 8px;">Driver</th>
+                <th style="padding:12px 8px;">Status</th>
+                <th style="padding:12px 8px;">Last Service</th>
+              </tr>
+            </thead>
+            <tbody id="dashRecentBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── VEHICLES ─── -->
+    <section class="page" id="page-vehicles">
+      <div class="page-header">
+        <h1>Vehicle Fleet</h1>
+        <button class="btn-primary" id="addVehicleBtn">+ Add Vehicle</button>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <select id="vehicleStatusFilter" class="filter-select">
+          <option value="">All Status</option>
+          <option value="Active">Active</option>
+          <option value="Maintenance">Maintenance</option>
+          <option value="Idle">Idle</option>
+        </select>
+        <select id="vehicleDeptFilter" class="filter-select">
+          <option value="">All Departments</option>
+          <option value="general">🏢 General</option>
+          <option value="scm">📦 SCM</option>
+          <option value="accounts">💰 Accounts</option>
+          <option value="sale">💼 Sale</option>
+          <option value="admin">🛡️ Admin</option>
+          <option value="production">🏭 Production</option>
+        </select>
+        <select id="vehicleTypeFilter" class="filter-select">
+          <option value="">All Types</option>
+          <option value="Car">Car</option>
+          <option value="Truck">Truck</option>
+          <option value="Van">Van</option>
+          <option value="Motorcycle">Motorcycle</option>
+          <option value="Bus">Bus</option>
+        </select>
+        <input type="text" id="vehicleSearch" class="filter-input" placeholder="Search by name, plate, chassis…" />
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="vehiclesTable">
+          <thead>
+            <tr>
+              <th>SR</th>
+              <th>Reg No</th>
+              <th>Model</th>
+              <th>Make &amp; Type</th>
+              <th>Color / Power</th>
+              <th>Chassis &amp; Engine No</th>
+              <th>Assigned To &amp; Designation</th>
+              <th>Dept</th>
+              <th>Insurance</th>
+              <th>Tag</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="vehiclesBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─── BIKES ─── -->
+    <section class="page" id="page-bikes">
+      <div class="page-header">
+        <h1>Company Bikes</h1>
+        <button class="btn-primary" id="addBikeBtn">+ Add Bike</button>
+      </div>
+      
+      <div class="filter-bar">
+        <select id="bikeDeptFilter" class="filter-select">
+          <option value="">All Departments</option>
+          <option value="general">🏢 General</option>
+          <option value="scm">📦 SCM</option>
+          <option value="accounts">💰 Accounts</option>
+          <option value="sale">💼 Sale</option>
+          <option value="admin">🛡️ Admin</option>
+          <option value="production">🏭 Production</option>
+        </select>
+        <input type="text" id="bikeSearch" class="filter-input" placeholder="Search by Plate or Name…" style="width:250px;" />
+      </div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Reg No</th>
+              <th>Bike Model</th>
+              <th>Color</th>
+              <th>Engine / Chassis</th>
+              <th>Rider Name</th>
+              <th>Dept</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="bikesBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─── DRIVERS ─── -->
+    <section class="page" id="page-drivers">
+      <div class="page-header">
+        <h1>Driver Management</h1>
+        <button class="btn-primary" id="addDriverBtn">+ Add Driver</button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="driverSearch" class="filter-input" placeholder="Search drivers…" />
+      </div>
+      <div class="cards-grid" id="driversGrid"></div>
+    </section>
+
+    <!-- ─── MAINTENANCE ─── -->
+    <section class="page" id="page-maintenance">
+      <div class="page-header">
+        <h1>Maintenance Records</h1>
+        <button class="btn-primary" id="addMaintenanceBtn">+ Log Maintenance</button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="maintenanceSearch" class="filter-input" placeholder="Search by vehicle, type, notes…" oninput="renderMaintenance()" />
+        <select id="maintenanceStatusFilter" class="filter-select" onchange="renderMaintenance()">
+          <option value="">All Status</option>
+          <option value="Completed">Completed</option>
+          <option value="Pending">Pending</option>
+          <option value="In Progress">In Progress</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="maintenanceTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Vehicle</th>
+              <th>Driver</th>
+              <th>Type</th>
+              <th>Date</th>
+              <th>Cost (PKR)</th>
+              <th>Status</th>
+              <th>Notes</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="maintenanceBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─── FUEL ─── -->
+    <section class="page" id="page-fuel">
+      <div class="page-header">
+        <h1>Fuel Log</h1>
+        <button class="btn-primary" id="addFuelBtn">+ Add Fuel Entry</button>
+      </div>
+      <div class="stats-grid" style="margin-bottom:2rem;">
+        <div class="stat-card card-blue">
+          <div class="stat-icon">⛽</div>
+          <div class="stat-info">
+            <span class="stat-value" id="fuel-total-litres">0 L</span>
+            <span class="stat-label">Total Fuel Used</span>
+          </div>
+        </div>
+        <div class="stat-card card-green">
+          <div class="stat-icon">💰</div>
+          <div class="stat-info">
+            <span class="stat-value" id="fuel-total-cost">PKR 0</span>
+            <span class="stat-label">Total Fuel Cost</span>
+          </div>
+        </div>
+        <div class="stat-card card-orange">
+          <div class="stat-icon">📊</div>
+          <div class="stat-info">
+            <span class="stat-value" id="fuel-avg">0 L/entry</span>
+            <span class="stat-label">Avg per Entry</span>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="fuelTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Vehicle</th>
+              <th>Date</th>
+              <th>Litres</th>
+              <th>Rate/L</th>
+              <th>Total (PKR)</th>
+              <th>Odometer (km)</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="fuelBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─── BILL VIEW ─── -->
+    <section class="page" id="page-bills">
+      <div class="page-header">
+        <h1>Bill View &amp; Invoices</h1>
+      </div>
+
+      <!-- Bill Stats -->
+      <div class="stats-grid" style="margin-bottom: 2rem;">
+        <div class="stat-card card-blue">
+          <div class="stat-icon">💵</div>
+          <div class="stat-info">
+            <span class="stat-value" id="bill-stat-total-pkr">PKR 0</span>
+            <span class="stat-label">Total Bills Amount</span>
+          </div>
+        </div>
+        <div class="stat-card card-green">
+          <div class="stat-icon">✅</div>
+          <div class="stat-info">
+            <span class="stat-value" id="bill-stat-paid">0</span>
+            <span class="stat-label">Paid Bills</span>
+          </div>
+        </div>
+        <div class="stat-card card-orange">
+          <div class="stat-icon">⏳</div>
+          <div class="stat-info">
+            <span class="stat-value" id="bill-stat-pending">0</span>
+            <span class="stat-label">Pending Approval</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-bar">
+        <select id="billTypeFilter" class="filter-select" onchange="renderBills()">
+          <option value="">All Types</option>
+          <option value="Fuel">Fuel Bill</option>
+          <option value="Maintenance">Maintenance Bill</option>
+          <option value="Custom">Custom / General Bill</option>
+        </select>
+        <select id="billStatusFilter" class="filter-select" onchange="renderBills()">
+          <option value="">All Status</option>
+          <option value="Paid">Paid</option>
+          <option value="Pending">Pending</option>
+        </select>
+        <select id="billVehicleFilter" class="filter-select" onchange="renderBills()">
+          <option value="">All Vehicles</option>
+        </select>
+        <input type="text" id="billSearch" class="filter-input" placeholder="Search by Bill No, Vendor..." oninput="renderBills()" />
+      </div>
+
+      <!-- Bills Table -->
+      <div class="table-wrap">
+        <table class="data-table" id="billsTable">
+          <thead>
+            <tr>
+              <th>SR</th>
+              <th>Bill No</th>
+              <th>Date</th>
+              <th>Vehicle</th>
+              <th>Type</th>
+              <th>Vendor / Description</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="billsBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Invoice Download History -->
+      <div style="margin-top:32px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+          <h3 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text);">📥 Invoice Download History</h3>
+          <button class="btn-secondary" onclick="clearDownloadHistory()" style="font-size:0.8rem;padding:6px 14px;">🗑 Clear History</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Bill No</th>
+                <th>Type</th>
+                <th>Vehicle</th>
+                <th>Amount</th>
+                <th>Downloaded At</th>
+              </tr>
+            </thead>
+            <tbody id="downloadHistoryBody">
+              <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📭</div><p>No downloads yet</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── TOKEN & TAX ─── -->
+    <section class="page" id="page-tokentax">
+      <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div>
+          <h1 style="font-size:1.8rem; font-weight:800; color:var(--text); margin-bottom:4px;">Token &amp; Tax</h1>
+          <p class="page-sub" style="font-size:0.95rem; color:var(--text-muted);">Manage and monitor vehicle token renewals and tags</p>
+        </div>
+        <button class="btn-primary" onclick="openTokenTaxModal()">
+          <span class="btn-icon">+</span> Add Vehicle
+        </button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="tokentaxSearch" class="filter-input" placeholder="Search by vehicle plate or name..." oninput="renderTokenTax()" style="width: 300px;" />
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="tokentaxTable">
+          <thead>
+            <tr>
+              <th>SR</th>
+              <th>Reg No</th>
+              <th>Model Name</th>
+              <th>Make &amp; Type</th>
+              <th>Assign Name</th>
+              <th>Token Status</th>
+              <th>Start Date</th>
+              <th>Expiry Date</th>
+            </tr>
+          </thead>
+          <tbody id="tokentaxBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─── REPORTS ─── -->
+    <section class="page" id="page-reports">
+      <div class="page-header">
+        <h1>Reports & Analytics</h1>
+        <button class="btn-primary" onclick="printReport()">🖨 Print Report</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card card-blue">
+          <div class="stat-icon">🚙</div>
+          <div class="stat-info">
+            <span class="stat-value" id="rep-vehicles">0</span>
+            <span class="stat-label">Total Vehicles</span>
+          </div>
+        </div>
+        <div class="stat-card card-green">
+          <div class="stat-icon">👤</div>
+          <div class="stat-info">
+            <span class="stat-value" id="rep-drivers">0</span>
+            <span class="stat-label">Total Drivers</span>
+          </div>
+        </div>
+        <div class="stat-card card-orange">
+          <div class="stat-icon">🔧</div>
+          <div class="stat-info">
+            <span class="stat-value" id="rep-maint-cost">PKR 0</span>
+            <span class="stat-label">Total Maintenance Cost</span>
+          </div>
+        </div>
+        <div class="stat-card card-purple">
+          <div class="stat-icon">⛽</div>
+          <div class="stat-info">
+            <span class="stat-value" id="rep-fuel-cost">PKR 0</span>
+            <span class="stat-label">Total Fuel Cost</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly Report Table -->
+      <div class="section-card" style="background:var(--card);padding:24px;border-radius:16px;box-shadow:0 4px 15px rgba(0,0,0,0.05);border:1px solid var(--border);margin-bottom:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+          <h3 style="margin:0;font-size:1.2rem;font-weight:700;">📊 Monthly Fuel & Maintenance Report</h3>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="reportYearFilter" class="filter-select" onchange="renderMonthlyReportTable()">
+              <option value="">All Years</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap" style="overflow-x:auto;">
+          <table class="data-table" id="monthlyReportTable" style="width:100%;">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Fuel (Litres)</th>
+                <th>Fuel Cost (PKR)</th>
+                <th>Maintenance Cost (PKR)</th>
+                <th>Total Spend (PKR)</th>
+              </tr>
+            </thead>
+            <tbody id="monthlyReportBody">
+              <tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">Loading...</td></tr>
+            </tbody>
+            <tfoot id="monthlyReportFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card wide">
+          <h3>Maintenance Cost per Vehicle</h3>
+          <canvas id="maintChart" width="700" height="280"></canvas>
+        </div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card wide">
+          <h3>Vehicle Type Distribution</h3>
+          <canvas id="typeChart" width="700" height="280"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── DEPARTMENTS ─── -->
+    <section class="page" id="page-departments">
+      <div class="page-header">
+        <h1>Departments</h1>
+        <button class="btn-primary" id="addAllotmentBtn">+ Allot Vehicle</button>
+      </div>
+
+      <!-- Department Stats -->
+      <div class="stats-grid" style="margin-bottom:2rem;">
+        <div class="stat-card card-blue" style="cursor:pointer;" onclick="filterDeptPage('general')">
+          <div class="stat-icon">🏢</div>
+          <div class="stat-info">
+            <span class="stat-value" id="dept-stat-general">0</span>
+            <span class="stat-label">General</span>
+          </div>
+          <div class="stat-change up">Vehicles allotted</div>
+        </div>
+        <div class="stat-card card-purple" style="cursor:pointer;" onclick="filterDeptPage('admin')">
+          <div class="stat-icon">🛡️</div>
+          <div class="stat-info">
+            <span class="stat-value" id="dept-stat-admin">0</span>
+            <span class="stat-label">Admin</span>
+          </div>
+          <div class="stat-change up">Vehicles allotted</div>
+        </div>
+        <div class="stat-card card-green" style="cursor:pointer;" onclick="filterDeptPage('sale')">
+          <div class="stat-icon">💼</div>
+          <div class="stat-info">
+            <span class="stat-value" id="dept-stat-sale">0</span>
+            <span class="stat-label">Sale</span>
+          </div>
+          <div class="stat-change up">Vehicles allotted</div>
+        </div>
+        <div class="stat-card card-orange">
+          <div class="stat-icon">🔗</div>
+          <div class="stat-info">
+            <span class="stat-value" id="dept-stat-total">0</span>
+            <span class="stat-label">Total Allotments</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <select id="deptPageFilter" class="filter-select" onchange="renderDepartments()">
+          <option value="">All Departments</option>
+          <option value="general">🏢 General</option>
+          <option value="scm">📦 SCM</option>
+          <option value="accounts">💰 Accounts</option>
+          <option value="sale">💼 Sale</option>
+          <option value="admin">🛡️ Admin</option>
+          <option value="production">🏭 Production</option>
+        </select>
+        <select id="deptStatusFilter" class="filter-select" onchange="renderDepartments()">
+          <option value="">All Status</option>
+          <option value="Active">Active</option>
+          <option value="Returned">Returned</option>
+        </select>
+        <input type="text" id="deptSearch" class="filter-input" placeholder="Search vehicle or department…" oninput="renderDepartments()" />
+      </div>
+
+      <!-- Per-Department Cards -->
+      <div id="deptCardsArea"></div>
+    </section>
+
+    <!-- ─── SETTINGS ─── -->
+    <section class="page" id="page-settings">
+      <div class="page-header">
+        <h1>System Settings</h1>
+      </div>
+
+      <div class="settings-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:20px;margin-bottom:20px;">
+        <!-- Branding Form -->
+        <div class="card" style="padding:20px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);">
+          <h3 style="margin-top:0;margin-bottom:15px;color:var(--text);font-weight:700;">🏢 Company Branding</h3>
+          <form id="settingsBrandingForm">
+            <div class="form-group" style="margin-bottom:12px;">
+              <label>Company Name</label>
+              <input type="text" id="setCompanyName" placeholder="e.g. Vision Food & Packaging" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);" required />
+            </div>
+            <div class="form-group" style="margin-bottom:12px;">
+              <label>Location / City</label>
+              <input type="text" id="setCompanyCity" placeholder="e.g. Lahore" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);" required />
+            </div>
+            <div class="form-group" style="margin-bottom:15px;">
+              <label>Address Details</label>
+              <input type="text" id="setCompanyAddress" placeholder="e.g. Plot# 363, Sunder Industrial Estate" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);" required />
+            </div>
+            <button type="submit" class="btn-primary" style="width:100%;">Save Branding</button>
+          </form>
+        </div>
+
+        <!-- Security Form -->
+        <div class="card" style="padding:20px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);">
+          <h3 style="margin-top:0;margin-bottom:15px;color:var(--text);font-weight:700;">🔒 Security Credentials</h3>
+          <form id="settingsSecurityForm">
+            <div class="form-group" style="margin-bottom:12px;">
+              <label>System Username</label>
+              <input type="text" id="setSystemUsername" placeholder="e.g. admin" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);" required />
+            </div>
+            <div class="form-group" style="margin-bottom:15px;">
+              <label>System Password</label>
+              <input type="text" id="setSystemPassword" placeholder="e.g. admin123" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);" required />
+            </div>
+            <button type="submit" class="btn-primary" style="width:100%;">Save Credentials</button>
+          </form>
+        </div>
+
+        <!-- Data Portability -->
+        <div class="card" style="padding:20px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;justify-content:space-between;">
+          <div>
+            <h3 style="margin-top:0;margin-bottom:10px;color:var(--text);font-weight:700;">💾 Data Backup & Import</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:15px;">Export your complete fleet, driver, maintenance, and bill data to move it to another system, or restore a previous backup.</p>
+          </div>
+          <div>
+            <button type="button" class="btn-primary" onclick="exportAppData()" style="width:100%;margin-bottom:12px;background:#10b981;border-color:#10b981;">📥 Export Data (JSON)</button>
+            <button type="button" class="btn-secondary" onclick="restoreAutoBackup()" style="width:100%;margin-bottom:12px;background:var(--bg2);color:var(--text);border-color:var(--border);">🔄 Restore Auto-Backup</button>
+            <div style="margin-bottom:12px;">
+              <label class="btn-secondary" style="display:block;text-align:center;cursor:pointer;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">
+                📤 Import Data (JSON)
+                <input type="file" id="importFile" onchange="importAppData(event)" style="display:none;" accept=".json" />
+              </label>
+            </div>
+            <button type="button" class="btn-danger" onclick="resetAppData()" style="width:100%;">⚠️ Reset All Data</button>
+          </div>
+        </div>
+
+        <!-- Firebase Sync Form -->
+        <div class="card" style="padding:20px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);grid-column: 1 / -1;">
+          <h3 style="margin-top:0;margin-bottom:10px;color:var(--text);font-weight:700;">🔄 Real-time Cloud Sync (Firebase)</h3>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:15px;">Enable automatic, real-time syncing of all vehicles, bills, and logs across multiple browsers and systems. (Leave empty to disable and keep local storage only).</p>
+          <form id="settingsFirebaseForm" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="text" id="fbApiKey" placeholder="AIzaSy..." style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);" />
+            </div>
+            <div class="form-group">
+              <label>Auth Domain</label>
+              <input type="text" id="fbAuthDomain" placeholder="your-project.firebaseapp.com" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);" />
+            </div>
+            <div class="form-group">
+              <label>Database URL</label>
+              <input type="text" id="fbDatabaseURL" placeholder="https://your-project-default-rtdb.firebaseio.com" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);" />
+            </div>
+            <div class="form-group">
+              <label>Project ID</label>
+              <input type="text" id="fbProjectId" placeholder="your-project" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);" />
+            </div>
+            <div style="grid-column: 1 / -1; display: flex; gap: 10px; margin-top: 10px;">
+              <button type="submit" class="btn-primary" style="padding: 10px 24px;">Enable Cloud Sync</button>
+              <button type="button" class="btn-secondary" onclick="disableFirebaseSync()" style="padding: 10px 24px;">Disable Sync</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Live Access & Hosting -->
+        <div class="card" style="padding:20px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);grid-column:1/-1;">
+          <h3 style="margin-top:0;margin-bottom:10px;color:var(--text);font-weight:700;">🌐 Live Access on Multiple Systems</h3>
+          <p style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;">Since this is a client-side web application, you can easily open and run it anywhere:</p>
+          <ul style="font-size:0.85rem;color:var(--text-secondary);padding-left:20px;line-height:1.6;margin-top:8px;">
+            <li><strong>Offline/Local Copy:</strong> Copy this entire folder to a USB drive or send it via email. Simply double-click on <code>index.html</code> on any system to open the dashboard.</li>
+            <li><strong>Data Syncing:</strong> Use the <strong>Export Data</strong> button to save your changes, copy the JSON file to your other computer, and click <strong>Import Data</strong> to upload it.</li>
+            <li><strong>Free Hosting:</strong> You can host this folder on free static hosts like GitHub Pages, Vercel, Netlify, or Surge to access it via a live URL on any mobile, tablet, or laptop worldwide!</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ──── MODALS ──── -->
+
+<!-- Vehicle Modal -->
+<div class="modal-overlay" id="vehicleModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 id="vehicleModalTitle">Add Vehicle</h2>
+      <button class="modal-close" onclick="closeModal('vehicleModal')">✕</button>
+    </div>
+    <form id="vehicleForm" class="modal-form">
+      <input type="hidden" id="vehicleId" />
+
+      <!-- Row 1: Reg No + Model Year -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Registration No *</label>
+          <input type="text" id="vehiclePlate" placeholder="e.g. ARX-361" required />
+        </div>
+        <div class="form-group">
+          <label>Model Year *</label>
+          <input type="number" id="vehicleYear" placeholder="e.g. 2024" min="1980" max="2030" required />
+        </div>
+      </div>
+
+      <!-- Row 2: Make & Type + Model Name -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Model Name *</label>
+          <input type="text" id="vehicleName" placeholder="e.g. Toyota Grande" required />
+        </div>
+        <div class="form-group">
+          <label>Make &amp; Type *</label>
+          <select id="vehicleType" required>
+            <option value="">Select Type</option>
+            <option>Car</option>
+            <option>Truck</option>
+            <option>Van</option>
+            <option>Motorcycle</option>
+            <option>Bus</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 3: Color + Power CC -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Color</label>
+          <input type="text" id="vehicleColor" placeholder="e.g. White" />
+        </div>
+        <div class="form-group">
+          <label>Power (CC)</label>
+          <input type="text" id="vehiclePower" placeholder="e.g. 1800cc" />
+        </div>
+      </div>
+
+      <!-- Row 4: Department -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Department *</label>
+          <select id="vehicleDept" required>
+            <option value="">Select Department</option>
+            <option value="general">🏢 General</option>
+            <option value="scm">📦 SCM</option>
+            <option value="accounts">💰 Accounts</option>
+            <option value="sale">💼 Sale</option>
+            <option value="admin">🛡️ Admin</option>
+            <option value="production">🏭 Production</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="vehicleStatus">
+            <option>Active</option>
+            <option>Maintenance</option>
+            <option>Idle</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 5: Chassis No + Engine No -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Chassis No</label>
+          <input type="text" id="vehicleChassis" placeholder="e.g. JT2AE09W1D3012345" />
+        </div>
+        <div class="form-group">
+          <label>Engine No</label>
+          <input type="text" id="vehicleEngine" placeholder="e.g. 2NZ-1234567" />
+        </div>
+      </div>
+
+      <!-- Row 6: Assigned Name + Designation -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Assigned Name</label>
+          <select id="vehicleDriver">
+            <option value="">— Unassigned —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Designation</label>
+          <input type="text" id="vehicleDesignation" placeholder="e.g. GM, Manager, Executive" />
+        </div>
+      </div>
+
+      <!-- Row 6b: Employee ID + Allotment Date -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Employee ID</label>
+          <input type="text" id="vehicleEmpId" placeholder="e.g. EMP-101" />
+        </div>
+        <div class="form-group">
+          <label>Allotment Date</label>
+          <input type="date" id="vehicleAllotmentDate" />
+        </div>
+      </div>
+
+      <!-- Row 7: Insurance -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Insurance Status</label>
+          <select id="vehicleInsurance">
+            <option value="not_insured">Not Insured</option>
+            <option value="insured">Insured</option>
+            <option value="expired">Expired</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Insurance Expiry Date</label>
+          <input type="date" id="vehicleInsuranceExpiry" />
+        </div>
+      </div>
+
+      <!-- Row 8: Token / Tags -->
+      <div class="form-group">
+        <label>Token &amp; Tags</label>
+        <div class="checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="vehicleEtag" />
+            <span class="checkbox-custom"></span>
+            Sundar E-Tag / Token Renewed
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="vehicleEnvTag" />
+            <span class="checkbox-custom"></span>
+            Environmental Tag
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('vehicleModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save Vehicle</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Bike Modal -->
+<div class="modal-overlay" id="bikeModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 id="bikeModalTitle">Add Bike</h2>
+      <button class="modal-close" onclick="closeModal('bikeModal')">✕</button>
+    </div>
+    <form id="bikeForm" class="modal-form">
+      <input type="hidden" id="bikeId" />
+
+      <!-- Row 1: Reg No + Model Year -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Registration No (Plate) *</label>
+          <input type="text" id="bikePlate" placeholder="e.g. LES-1234" required />
+        </div>
+        <div class="form-group">
+          <label>Model Year *</label>
+          <input type="number" id="bikeYear" placeholder="e.g. 2024" min="1980" max="2030" required />
+        </div>
+      </div>
+
+      <!-- Row 2: Bike Model + Color -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Bike Model Name *</label>
+          <input type="text" id="bikeName" placeholder="e.g. Honda CD-70" required />
+        </div>
+        <div class="form-group">
+          <label>Color</label>
+          <input type="text" id="bikeColor" placeholder="e.g. Red" />
+        </div>
+      </div>
+
+      <!-- Row 3: Department + Status -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Department *</label>
+          <select id="bikeDept" required>
+            <option value="">Select Department</option>
+            <option value="general">🏢 General</option>
+            <option value="scm">📦 SCM</option>
+            <option value="accounts">💰 Accounts</option>
+            <option value="sale">💼 Sale</option>
+            <option value="admin">🛡️ Admin</option>
+            <option value="production">🏭 Production</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="bikeStatus">
+            <option>Active</option>
+            <option>Maintenance</option>
+            <option>Idle</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 4: Rider Name (free text) -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Rider Name (write name)</label>
+          <input type="text" id="bikeDriver" placeholder="e.g. Ali Ahmed" />
+        </div>
+        <div class="form-group">
+          <label>Engine No</label>
+          <input type="text" id="bikeEngine" placeholder="e.g. CD70-12345" />
+        </div>
+      </div>
+
+      <!-- Row 5: Chassis No -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Chassis No</label>
+          <input type="text" id="bikeChassis" placeholder="e.g. PC70SE1234567" />
+        </div>
+        <div class="form-group">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('bikeModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save Bike</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Driver Modal -->
+<div class="modal-overlay" id="driverModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="driverModalTitle">Add Driver</h2>
+      <button class="modal-close" onclick="closeModal('driverModal')">✕</button>
+    </div>
+    <form id="driverForm" class="modal-form">
+      <input type="hidden" id="driverId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label>Driver Type *</label>
+          <select id="driverType" required disabled>
+            <option value="Company">Company Driver</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Employee ID *</label>
+          <input type="text" id="driverEmpId" placeholder="e.g. EMP-101" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="driverName" placeholder="e.g. Ali Hassan" required />
+        </div>
+        <div class="form-group">
+          <label>Phone *</label>
+          <input type="text" id="driverPhone" placeholder="e.g. 0300-1234567" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>License No. *</label>
+          <input type="text" id="driverLicense" placeholder="e.g. LHR-12345" required />
+        </div>
+        <div class="form-group">
+          <label>License Expiry</label>
+          <input type="date" id="driverLicenseExpiry" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Address</label>
+        <input type="text" id="driverAddress" placeholder="e.g. Lahore, Punjab" />
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('driverModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save Driver</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Maintenance Modal -->
+<div class="modal-overlay" id="maintenanceModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="maintenanceModalTitle">Log Maintenance</h2>
+      <button class="modal-close" onclick="closeModal('maintenanceModal')">✕</button>
+    </div>
+    <form id="maintenanceForm" class="modal-form">
+      <input type="hidden" id="maintenanceId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label>Vehicle *</label>
+          <select id="maintenanceVehicle" required>
+            <option value="">Select Vehicle</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Driver</label>
+          <select id="maintenanceDriver">
+            <option value="">Select Driver</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Maintenance Type *</label>
+          <select id="maintenanceType" required>
+            <option value="">Select Type</option>
+            <option>Oil Change</option><option>Tyre Replacement</option>
+            <option>Engine Repair</option><option>Brake Service</option>
+            <option>AC Service</option><option>General Service</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="maintenanceDate" required />
+        </div>
+        <div class="form-group">
+          <label>Cost (PKR) *</label>
+          <input type="number" id="maintenanceCost" placeholder="e.g. 5000" min="0" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Status</label>
+          <select id="maintenanceStatus">
+            <option>Completed</option>
+            <option>Pending</option>
+            <option>In Progress</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Vendor / Company Name</label>
+          <input type="text" id="maintenanceVendor" placeholder="e.g. Al-Madina Auto Workshop" />
+        </div>
+        <div class="form-group">
+          <label>Vendor Address</label>
+          <input type="text" id="maintenanceVendorAddress" placeholder="e.g. GT Road, Lahore" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Current Reading (km)</label>
+          <input type="number" id="maintenanceCurrentReading" placeholder="e.g. 45000" min="0" />
+        </div>
+        <div class="form-group">
+          <label>Next Reading (km)</label>
+          <input type="number" id="maintenanceNextReading" placeholder="e.g. 50000" min="0" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="maintenanceNotes" placeholder="Describe the maintenance work…" rows="3"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('maintenanceModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save Record</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Fuel Modal -->
+<div class="modal-overlay" id="fuelModal">
+  <div class="modal" style="max-width:1100px;width:98vw;">
+    <div class="modal-header">
+      <h2 id="fuelModalTitle">Add Fuel Entry</h2>
+      <button class="modal-close" onclick="closeModal('fuelModal')">✕</button>
+    </div>
+    <form id="fuelForm" class="modal-form">
+      <input type="hidden" id="fuelId" />
+
+      <!-- Top controls: Department filter + Search + Add Row -->
+      <div class="form-row" style="margin-bottom:14px;align-items:flex-end;">
+        <div class="form-group">
+          <label>Filter by Department</label>
+          <select id="fuelDeptFilter" onchange="applyFuelFilters()" style="padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;">
+            <option value="">All Departments</option>
+            <option value="general">🏢 General</option>
+            <option value="scm">📦 SCM</option>
+            <option value="accounts">💰 Accounts</option>
+            <option value="sale">💼 Sale</option>
+            <option value="admin">🛡️ Admin</option>
+            <option value="production">🏭 Production</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Search Vehicle</label>
+          <input type="text" id="fuelVehicleSearch" oninput="applyFuelFilters()" placeholder="Search vehicle name or plate..." style="width:100%;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;" />
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;">
+          <button type="button" class="btn-primary" onclick="addFuelRow()" style="height:40px;">
+            + Add Vehicle Row
+          </button>
+        </div>
+      </div>
+
+      <!-- Multi-vehicle table -->
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+          <thead>
+            <tr style="background:var(--bg2);border-bottom:2px solid var(--border);">
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;white-space:nowrap;">#</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;">Vehicle</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;">Driver</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;">Fuel</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;">Date</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;">Litres</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;">Rate/L (PKR)</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;">Total (PKR)</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;">Odometer (km)</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;color:#10b981;">Avg (km/L)</th>
+              <th style="padding:10px 8px;text-align:left;color:var(--text-secondary);font-weight:700;color:#f97316;">⛽ Pump Name</th>
+              <th style="padding:10px 8px;"></th>
+            </tr>
+          </thead>
+          <tbody id="fuelRowsBody">
+            <!-- rows injected by JS -->
+          </tbody>
+          <tfoot>
+            <tr style="background:var(--bg2);border-top:2px solid var(--border);">
+              <td colspan="7" style="padding:10px 8px;font-weight:700;color:var(--text);text-align:right;">Grand Total:</td>
+              <td style="padding:10px 8px;font-weight:800;color:var(--accent);font-size:1rem;" id="fuelGrandTotal">PKR 0</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="modal-actions" style="margin-top:16px;">
+        <button type="button" class="btn-secondary" onclick="closeModal('fuelModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save All Entries</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- Allotment Modal -->
+<div class="modal-overlay" id="allotmentModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="allotmentModalTitle">Allot Vehicle to Department</h2>
+      <button class="modal-close" onclick="closeModal('allotmentModal')">✕</button>
+    </div>
+    <form id="allotmentForm" class="modal-form">
+      <input type="hidden" id="allotmentId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label>Department *</label>
+          <select id="allotmentDept" required>
+            <option value="">Select Department</option>
+            <option value="general">🏢 General</option>
+            <option value="scm">📦 SCM</option>
+            <option value="accounts">💰 Accounts</option>
+            <option value="sale">💼 Sale</option>
+            <option value="admin">🛡️ Admin</option>
+            <option value="production">🏭 Production</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Vehicle *</label>
+          <select id="allotmentVehicle" required>
+            <option value="">Select Vehicle</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Allotment Date *</label>
+          <input type="date" id="allotmentDate" required />
+        </div>
+        <div class="form-group">
+          <label>Purpose</label>
+          <input type="text" id="allotmentPurpose" placeholder="e.g. Field visits, Deliveries" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Return Date</label>
+          <input type="date" id="allotmentReturn" />
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="allotmentStatus">
+            <option value="Active">Active</option>
+            <option value="Returned">Returned</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="allotmentNotes" placeholder="Any additional notes…" rows="2"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('allotmentModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save Allotment</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Bill Modal -->
+<div class="modal-overlay" id="billModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="billModalTitle">Create Bill Entry</h2>
+      <button class="modal-close" onclick="closeModal('billModal')">✕</button>
+    </div>
+    <form id="billForm" class="modal-form">
+      <input type="hidden" id="billId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label>Bill Number *</label>
+          <input type="text" id="billNumber" placeholder="e.g. VFP-90812" required />
+        </div>
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="billDate" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Vehicle *</label>
+          <select id="billVehicle" required>
+            <option value="">Select Vehicle</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Bill Type *</label>
+          <select id="billType" required>
+            <option value="Custom">Custom / General</option>
+            <option value="Fuel">Fuel Bill</option>
+            <option value="Maintenance">Maintenance Bill</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Vendor Name / Description *</label>
+          <input type="text" id="billVendor" placeholder="e.g. Shell Petrol Pump, Workshop" required />
+        </div>
+        <div class="form-group">
+          <label>Vendor Address</label>
+          <input type="text" id="billVendorAddress" placeholder="e.g. Sunder Industrial Estate, Lahore" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Amount (PKR) *</label>
+          <input type="number" id="billAmount" placeholder="e.g. 15000" min="0" required />
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="billStatus">
+            <option value="Pending">Pending</option>
+            <option value="Paid">Paid</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Current Reading (km)</label>
+          <input type="number" id="billCurrentReading" placeholder="e.g. 45000" min="0" />
+        </div>
+        <div class="form-group">
+          <label>Next Reading (km)</label>
+          <input type="number" id="billNextReading" placeholder="e.g. 50000" min="0" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="billNotes" placeholder="Additional details..." rows="2"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('billModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save Bill</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Invoice View Modal -->
+<div class="modal-overlay" id="invoiceModal">
+  <div class="modal modal-lg" style="background:#fff; color:#1e293b;">
+    <div class="modal-header" style="border-bottom:1px solid #e2e8f0; background:#f8fafc; color:#1e293b;">
+      <h2 style="color:#0f172a;">Printable Invoice</h2>
+      <button class="modal-close" onclick="closeModal('invoiceModal')" style="background:#f1f5f9; border-color:#cbd5e1; color:#64748b;">✕</button>
+    </div>
+    
+    <!-- Printable Invoice Sheet -->
+    <div id="invoiceSheet" style="display:none; padding:40px; font-family:'Outfit', sans-serif; background:#fff; color:#0f172a; min-height:297mm; box-sizing:border-box; flex-direction:column; justify-content:space-between;">
+      <div>
+        <!-- Top Row: Logo & Company (Left) vs Vendor (Right) -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f172a; padding-bottom:20px; margin-bottom:20px;">
+          
+          <!-- Left side: Logo, Company Name, Vehicle, Driver, Contact No -->
+          <div style="width: 50%;">
+            <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
+              <img src="logo.jpg" alt="Logo" class="logo-img" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;" />
+              <div>
+                <h2 style="margin:0; font-size:1.4rem; font-weight:800; color:#1e3a8a;" id="invCompanyNameSimple">Vision Food &amp; Packaging</h2>
+                <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Fleet Management Department</span>
+              </div>
+            </div>
+            <div style="font-size:0.9rem; color:#334155; line-height:1.6;">
+              <div><strong>Company Name:</strong> <span id="invCompanyNameField">Vision Food &amp; Packaging</span></div>
+              <div><strong>Vehicle No:</strong> <span id="invVehPlateField">-</span></div>
+              <div><strong>Driver Name:</strong> <span id="invDriverNameField">-</span></div>
+              <div><strong>Contact No:</strong> <span id="invDriverPhoneField">-</span></div>
+            </div>
+          </div>
+
+          <!-- Right side: Vendor Name, Address, Invoice No, Date -->
+          <div style="width: 45%; text-align: right; font-size:0.9rem; color:#334155; line-height:1.6;">
+            <h3 style="color:#1e3a8a; margin:0 0 10px 0; font-size:1.1rem; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">Vendor / Job Location</h3>
+            <div><strong>Workshop/Vendor:</strong> <span id="invVendorNameField">-</span></div>
+            <div><strong>Address:</strong> <span id="invVendorAddressField">-</span></div>
+            
+            <div style="margin-top:20px; border-top:1px dashed #cbd5e1; padding-top:10px;">
+              <div><strong>Invoice No:</strong> <strong id="invBillNoField">-</strong></div>
+              <div><strong>Date:</strong> <span id="invBillDateField">-</span></div>
+              <div><strong>Type:</strong> <span id="invBillTypeField">-</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Readings Row -->
+        <div style="display:flex; justify-content:space-between; background:#f8fafc; padding:12px; border-radius:6px; margin-bottom:20px; border:1px solid #e2e8f0; font-size:0.9rem;">
+          <div><strong>Current Odometer:</strong> <span id="invCurrentReadingField">-</span> km</div>
+          <div><strong>Next Service Due:</strong> <span id="invNextReadingField">-</span> km</div>
+        </div>
+
+        <!-- Description Table -->
+        <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.95rem;">
+          <thead>
+            <tr style="background:#1e3a8a; color:#fff; text-transform:uppercase; font-size:0.85rem;">
+              <th style="padding:12px; text-align:center; border:1px solid #cbd5e1; width:80px;">Qty</th>
+              <th style="padding:12px; text-align:left; border:1px solid #cbd5e1;">Description of Work</th>
+              <th style="padding:12px; text-align:left; border:1px solid #cbd5e1;">Details / Notes</th>
+              <th style="padding:12px; text-align:right; border:1px solid #cbd5e1; width:120px;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background:#fff;">
+              <td style="padding:12px; text-align:center; border:1px solid #cbd5e1;">1</td>
+              <td style="padding:12px; border:1px solid #cbd5e1; font-weight:700;" id="invDescField">-</td>
+              <td style="padding:12px; border:1px solid #cbd5e1; color:#475569;" id="invDetailsField">-</td>
+              <td style="padding:12px; text-align:right; border:1px solid #cbd5e1; font-weight:700; color:#1e3a8a;" id="invAmountField">PKR 0</td>
+            </tr>
+            <!-- Total Row inside table -->
+            <tr style="background:#f8fafc; font-weight:800;">
+              <td colspan="3" style="padding:12px; text-align:right; border:1px solid #cbd5e1;">TOTAL AMOUNT</td>
+              <td style="padding:12px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;" id="invTotalField">PKR 0</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Stamp Area -->
+        <div style="text-align:right; margin-bottom:40px;">
+          <div id="invStampSimple" style="border:4px double #22c55e; color:#22c55e; font-size:1.3rem; font-weight:900; text-transform:uppercase; padding:6px 16px; border-radius:8px; display:inline-block; transform:rotate(-5deg); letter-spacing:1px;">PAID</div>
+        </div>
+      </div>
+
+      <!-- Signatures & Footer -->
+      <div>
+        <!-- Signatures -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:50px; text-align:center; padding:0 20px;">
+          <div style="width:200px;">
+            <div style="border-top:2px solid #0f172a; padding-top:8px;">
+              <strong style="font-size:0.95rem; color:#0f172a;">Admin Officer</strong>
+            </div>
+          </div>
+          <div style="width:200px;">
+            <div style="border-top:2px solid #0f172a; padding-top:8px;">
+              <strong style="font-size:0.95rem; color:#0f172a;">Admin Manager</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Footer line -->
+        <div style="text-align:center; margin-top:40px; border-top:1px solid #e2e8f0; padding-top:15px; font-size:0.8rem; color:#64748b;">
+          Vision Food &amp; Packaging • Sunder Industrial Estate, Raiwind, Lahore
+        </div>
+      </div>
+    </div>
+    
+    <!-- Fuel Printable Invoice Sheet (Excel Layout) -->
+    <div id="fuelInvoiceSheet" style="display:none; padding:40px; font-family:'Outfit', sans-serif; background:#fff; color:#0f172a; min-height:297mm; box-sizing:border-box; flex-direction:column; justify-content:space-between;">
+      <div>
+        <!-- Top Row: Logo & Company (Left) vs Vendor (Right) -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f172a; padding-bottom:20px; margin-bottom:20px;">
+          
+          <!-- Left side: Logo, Company Name, Fleet Dept info -->
+          <div style="width: 50%;">
+            <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
+              <img src="logo.jpg" alt="Logo" class="logo-img" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;" />
+              <div>
+                <h2 style="margin:0; font-size:1.4rem; font-weight:800; color:#1e3a8a;">Vision Food &amp; Packaging</h2>
+                <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Fleet Management Department</span>
+              </div>
+            </div>
+            <div style="font-size:0.9rem; color:#334155; line-height:1.6;">
+              <div><strong>Company Name:</strong> <span>Vision Food &amp; Packaging</span></div>
+              <div><strong>Report Type:</strong> <span>Fuel Expenses Voucher</span></div>
+            </div>
+          </div>
+
+          <!-- Right side: Invoice No, Date, Pump -->
+          <div style="width: 45%; text-align: right; font-size:0.9rem; color:#334155; line-height:1.6;">
+            <h3 style="color:#1e3a8a; margin:0 0 10px 0; font-size:1.1rem; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">Voucher Details</h3>
+            <div><strong>Voucher No:</strong> <strong id="invBillNoFuelField" style="color:#1e3a8a;">-</strong></div>
+            <div><strong>Date Generated:</strong> <span id="invBillDateFuelField">-</span></div>
+            <div id="invPumpNameRow" style="display:none;"><strong>⛽ Pump Station:</strong> <span id="invPumpNameFuelField" style="color:#f97316;font-weight:700;">-</span></div>
+          </div>
+        </div>
+
+        <!-- Items Table -->
+        <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.9rem;">
+          <thead>
+            <tr style="background:#1e3a8a; color:#fff; text-transform:uppercase; font-size:0.8rem;">
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1;">Date</th>
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1;">Vehicle No#</th>
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1;">Fuel Type</th>
+              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1;">Litres</th>
+              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1;">Rate (PKR)</th>
+              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1;">Amount (PKR)</th>
+            </tr>
+          </thead>
+          <tbody id="fuelInvoiceBodySimple" style="color:#0f172a;">
+            <!-- Populated by JS -->
+          </tbody>
+          <tfoot>
+            <tr style="background:#f8fafc; font-weight:800; font-size:1rem;">
+              <td colspan="5" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1;">GRAND TOTAL</td>
+              <td id="fuelInvoiceGrandTotalSimple" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;">0</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <!-- Stamp Area -->
+        <div style="text-align:right; margin-bottom:40px;">
+          <div id="invStampFuelSimple" style="border:4px double #22c55e; color:#22c55e; font-size:1.3rem; font-weight:900; text-transform:uppercase; padding:6px 16px; border-radius:8px; display:inline-block; transform:rotate(-5deg); letter-spacing:1px;">PAID</div>
+        </div>
+      </div>
+
+      <!-- Signatures & Footer -->
+      <div>
+        <!-- Signatures -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:50px; text-align:center; padding:0 20px;">
+          <div style="width:200px;">
+            <div style="border-top:2px solid #0f172a; padding-top:8px;">
+              <strong style="font-size:0.95rem; color:#0f172a;">Admin Officer</strong>
+            </div>
+          </div>
+          <div style="width:200px;">
+            <div style="border-top:2px solid #0f172a; padding-top:8px;">
+              <strong style="font-size:0.95rem; color:#0f172a;">Admin Manager</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Footer line -->
+        <div style="text-align:center; margin-top:40px; border-top:1px solid #e2e8f0; padding-top:15px; font-size:0.8rem; color:#64748b;">
+          Vision Food &amp; Packaging • Sunder Industrial Estate, Raiwind, Lahore
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-actions" style="border-top:1px solid #e2e8f0; background:#f8fafc; padding:16px 24px;">
+      <button type="button" class="btn-secondary" onclick="closeModal('invoiceModal')">Close</button>
+      <button type="button" id="markPaidBtn" class="btn-primary" onclick="markInvoicePaid()" style="background:linear-gradient(135deg,#22c55e,#16a34a);">✅ Mark as Paid</button>
+      <button type="button" class="btn-primary" onclick="downloadInvoicePDF()" style="background:linear-gradient(135deg,#10b981,#059669);">📥 Download PDF</button>
+      <button type="button" class="btn-primary" onclick="printInvoiceSheet()">🖨 Print Invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2>Confirm Delete</h2>
+      <button class="modal-close" onclick="closeModal('deleteModal')">✕</button>
+    </div>
+    <p style="padding:0 1.5rem 1rem;color:var(--text-secondary);">Are you sure you want to delete this record? This action cannot be undone.</p>
+    <div class="modal-actions" style="padding:0 1.5rem 1.5rem;">
+      <button type="button" class="btn-secondary" onclick="closeModal('deleteModal')">Cancel</button>
+      <button type="button" class="btn-danger" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notification -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
