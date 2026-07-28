@@ -720,6 +720,7 @@
           </div>
           <div>
             <button type="button" class="btn-primary" onclick="exportAppData()" style="width:100%;margin-bottom:12px;background:#10b981;border-color:#10b981;">📥 Export Data (JSON)</button>
+            <button type="button" class="btn-primary" onclick="exportToExcel()" style="width:100%;margin-bottom:12px;background:#0284c7;border-color:#0284c7;">📊 Export to Excel (CSV)</button>
             <button type="button" class="btn-secondary" onclick="restoreAutoBackup()" style="width:100%;margin-bottom:12px;background:var(--bg2);color:var(--text);border-color:var(--border);">🔄 Restore Auto-Backup</button>
             <div style="margin-bottom:12px;">
               <label class="btn-secondary" style="display:block;text-align:center;cursor:pointer;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">
@@ -734,7 +735,7 @@
         <!-- Firebase Sync Form -->
         <div class="card" style="padding:20px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);grid-column: 1 / -1;">
           <h3 style="margin-top:0;margin-bottom:10px;color:var(--text);font-weight:700;">🔄 Real-time Cloud Sync (Firebase)</h3>
-          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:15px;">Enable automatic, real-time syncing of all vehicles, bills, and logs across multiple browsers and systems. (Leave empty to disable and keep local storage only).</p>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:15px;">Enable automatic, real-time syncing of all vehicles, bills, and logs across multiple browsers and systems automatically.</p>
           <form id="settingsFirebaseForm" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;">
             <div class="form-group">
               <label>API Key</label>
@@ -1471,11 +1472,11 @@
         <!-- Description Table -->
         <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.95rem;">
           <thead>
-            <tr style="background:#1e3a8a; color:#fff; text-transform:uppercase; font-size:0.85rem;">
-              <th style="padding:12px; text-align:center; border:1px solid #cbd5e1; width:80px;">Qty</th>
-              <th style="padding:12px; text-align:left; border:1px solid #cbd5e1;">Description of Work</th>
-              <th style="padding:12px; text-align:left; border:1px solid #cbd5e1;">Details / Notes</th>
-              <th style="padding:12px; text-align:right; border:1px solid #cbd5e1; width:120px;">Amount</th>
+            <tr style="background:#ffffff; color:#1e3a8a; text-transform:uppercase; font-size:0.85rem;">
+              <th style="padding:12px; text-align:center; border:1px solid #cbd5e1; width:80px; color:#1e3a8a; background:#ffffff;">QTY</th>
+              <th style="padding:12px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a; background:#ffffff;">DESCRIPTION OF WORK</th>
+              <th style="padding:12px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a; background:#ffffff;">DETAILS / NOTES</th>
+              <th style="padding:12px; text-align:right; border:1px solid #cbd5e1; width:120px; color:#1e3a8a; background:#ffffff;">AMOUNT</th>
             </tr>
           </thead>
           <tbody>
@@ -1493,9 +1494,9 @@
           </tbody>
         </table>
 
-        <!-- Stamp Area -->
-        <div style="text-align:right; margin-bottom:40px;">
-          <div id="invStampSimple" style="border:4px double #22c55e; color:#22c55e; font-size:1.3rem; font-weight:900; text-transform:uppercase; padding:6px 16px; border-radius:8px; display:inline-block; transform:rotate(-5deg); letter-spacing:1px;">PAID</div>
+        <!-- Stamp Area (Disabled/Hidden) -->
+        <div style="display:none;">
+          <div id="invStampSimple"></div>
         </div>
       </div>
 
@@ -1555,13 +1556,13 @@
         <!-- Items Table -->
         <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.9rem;">
           <thead>
-            <tr style="background:#1e3a8a; color:#fff; text-transform:uppercase; font-size:0.8rem;">
-              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1;">Date</th>
-              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1;">Vehicle No#</th>
-              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1;">Fuel Type</th>
-              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1;">Litres</th>
-              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1;">Rate (PKR)</th>
-              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1;">Amount (PKR)</th>
+            <tr style="background:#ffffff; color:#1e3a8a; text-transform:uppercase; font-size:0.8rem;">
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a; background:#ffffff;">DATE</th>
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a; background:#ffffff;">VEHICLE NO#</th>
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a; background:#ffffff;">FUEL TYPE</th>
+              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a; background:#ffffff;">LITRES</th>
+              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a; background:#ffffff;">RATE (PKR)</th>
+              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a; background:#ffffff;">AMOUNT (PKR)</th>
             </tr>
           </thead>
           <tbody id="fuelInvoiceBodySimple" style="color:#0f172a;">
@@ -1575,9 +1576,9 @@
           </tfoot>
         </table>
 
-        <!-- Stamp Area -->
-        <div style="text-align:right; margin-bottom:40px;">
-          <div id="invStampFuelSimple" style="border:4px double #22c55e; color:#22c55e; font-size:1.3rem; font-weight:900; text-transform:uppercase; padding:6px 16px; border-radius:8px; display:inline-block; transform:rotate(-5deg); letter-spacing:1px;">PAID</div>
+        <!-- Stamp Area (Disabled/Hidden) -->
+        <div style="display:none;">
+          <div id="invStampFuelSimple"></div>
         </div>
       </div>
 
@@ -1606,7 +1607,6 @@
     
     <div class="modal-actions" style="border-top:1px solid #e2e8f0; background:#f8fafc; padding:16px 24px;">
       <button type="button" class="btn-secondary" onclick="closeModal('invoiceModal')">Close</button>
-      <button type="button" id="markPaidBtn" class="btn-primary" onclick="markInvoicePaid()" style="background:linear-gradient(135deg,#22c55e,#16a34a);">✅ Mark as Paid</button>
       <button type="button" class="btn-primary" onclick="downloadInvoicePDF()" style="background:linear-gradient(135deg,#10b981,#059669);">📥 Download PDF</button>
       <button type="button" class="btn-primary" onclick="printInvoiceSheet()">🖨 Print Invoice</button>
     </div>

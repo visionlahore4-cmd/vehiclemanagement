@@ -44,8 +44,14 @@ function loadState() {
       }
       if (!state.settings.username) state.settings.username = 'admin';
       if (!state.settings.password) state.settings.password = 'admin123';
-      if (!state.settings.firebase) {
-        state.settings.firebase = { apiKey: '', authDomain: '', databaseURL: '', projectId: '' };
+      // Hardcode default Firebase keys so sync works out-of-the-box
+      if (!state.settings.firebase || !state.settings.firebase.apiKey) {
+        state.settings.firebase = {
+          apiKey: "AIzaSyBbVxKnrdPCL27G-c0HAQAUdVqQBtKjTO8",
+          authDomain: "my-project-vehicle-management.firebaseapp.com",
+          databaseURL: "https://my-project-vehicle-management-default-rtdb.firebaseio.com",
+          projectId: "my-project-vehicle-management"
+        };
       }
       if (state.settings.firebase && state.settings.firebase.databaseURL) {
         initFirebaseSync(state.settings.firebase);
@@ -1471,8 +1477,9 @@ function recalcFuelRow(idx) {
   if (!row) return;
   const litres = parseFloat(row.querySelector('.fuel-litres').value) || 0;
   const rate   = parseFloat(row.querySelector('.fuel-rate').value)   || 0;
-  const total  = litres * rate;
-  row.querySelector('.fuel-total').value = total > 0 ? Math.round(total) : '';
+  const rawTotal = litres * rate;
+  const roundedTotal = rawTotal > 0 ? Math.round(rawTotal / 10) * 10 : '';
+  row.querySelector('.fuel-total').value = roundedTotal;
   
   // Calculate fuel average
   const odometerEl = row.querySelector('.fuel-odometer');
@@ -1559,7 +1566,8 @@ document.getElementById('fuelForm').addEventListener('submit', e => {
     const date     = row.querySelector('.fuel-date')?.value;
     const litres   = parseFloat(row.querySelector('.fuel-litres')?.value) || 0;
     const rate     = parseFloat(row.querySelector('.fuel-rate')?.value)   || 0;
-    const cost     = parseFloat(row.querySelector('.fuel-total')?.value)  || 0;
+    const rawCost  = parseFloat(row.querySelector('.fuel-total')?.value)  || (litres * rate);
+    const cost     = Math.round(rawCost / 10) * 10;
     const odometer = parseFloat(row.querySelector('.fuel-odometer')?.value) || 0;
     
     // Check if any fields in the row are filled
@@ -2163,13 +2171,9 @@ function openInvoice(id) {
     document.getElementById('fuelInvoiceBodySimple').innerHTML = tbodyHtml;
     document.getElementById('fuelInvoiceGrandTotalSimple').textContent = fmtPKR(b.amount);
     
-    // Status Stamp for Fuel Invoice
+    // Status Stamp for Fuel Invoice (Disabled)
     const stampFuel = document.getElementById('invStampFuelSimple');
-    if (stampFuel) {
-      stampFuel.textContent = b.status === 'Paid' ? 'PAID' : 'PENDING';
-      stampFuel.style.borderColor = b.status === 'Paid' ? '#22c55e' : '#f97316';
-      stampFuel.style.color = b.status === 'Paid' ? '#22c55e' : '#f97316';
-    }
+    if (stampFuel) stampFuel.style.display = 'none';
   } else {
     document.getElementById('fuelInvoiceSheet').style.display = 'none';
     document.getElementById('invoiceSheet').style.display = 'block';
@@ -2194,21 +2198,14 @@ function openInvoice(id) {
     document.getElementById('invAmountField').textContent = fmtPKR(b.amount);
     document.getElementById('invTotalField').textContent = fmtPKR(b.amount);
 
-    // Status Stamp for Standard Invoice
+    // Status Stamp for Standard Invoice (Disabled)
     const stamp = document.getElementById('invStampSimple');
-    if (stamp) {
-      stamp.textContent = b.status === 'Paid' ? 'PAID' : 'PENDING';
-      stamp.style.borderColor = b.status === 'Paid' ? '#22c55e' : '#f97316';
-      stamp.style.color = b.status === 'Paid' ? '#22c55e' : '#f97316';
-    }
+    if (stamp) stamp.style.display = 'none';
   }
   
   openModal('invoiceModal');
   
-  // Track currently open bill for markInvoicePaid
   _currentInvoiceBillId = b.id;
-  const paidBtn = document.getElementById('markPaidBtn');
-  if (paidBtn) paidBtn.textContent = b.status === 'Paid' ? '↩ Mark as Pending' : '✅ Mark as Paid';
 }
 
 function printInvoiceSheet() {
@@ -2433,6 +2430,48 @@ function exportAppData() {
   downloadAnchor.click();
   downloadAnchor.remove();
   showToast('Backup file downloaded successfully! 📥', 'success');
+}
+
+function exportToExcel() {
+  try {
+    let csvRows = [];
+    csvRows.push("=== VEHICLES LIST ===");
+    csvRows.push("Plate No,Model Name,Type,Engine CC,Designation,Status,Token Status,Token Start Date,Token Expiry Date");
+    (state.vehicles || []).forEach(v => {
+      csvRows.push(`"${v.plate || ''}","${v.name || ''}","${v.type || ''}","${v.power || ''}","${v.designation || ''}","${v.status || ''}","${v.tokenStatus || ''}","${v.tokenStartDate || ''}","${v.tokenExpiryDate || ''}"`);
+    });
+
+    csvRows.push("\n=== DRIVERS LIST ===");
+    csvRows.push("Name,Phone,License No,License Expiry,Department/Designation");
+    (state.drivers || []).forEach(d => {
+      csvRows.push(`"${d.name || ''}","${d.phone || ''}","${d.license || ''}","${d.licenseExpiry || ''}","${d.address || ''}"`);
+    });
+
+    csvRows.push("\n=== FUEL LOGS ===");
+    csvRows.push("Date,Litres,Rate/L,Total Cost (PKR),Odometer,Pump Name");
+    (state.fuel || []).forEach(f => {
+      csvRows.push(`"${f.date || ''}","${f.litres || 0}","${f.rate || 0}","${f.cost || 0}","${f.odometer || 0}","${f.pump || ''}"`);
+    });
+
+    csvRows.push("\n=== MAINTENANCE LOGS ===");
+    csvRows.push("Date,Workshop Name,Parts Cost,Labor Cost,Total Cost (PKR),Status");
+    (state.maintenance || []).forEach(m => {
+      csvRows.push(`"${m.date || ''}","${m.workshop || ''}","${m.partsCost || 0}","${m.laborCost || 0}","${m.totalCost || 0}","${m.status || ''}"`);
+    });
+
+    const csvString = "\uFEFF" + csvRows.join("\n");
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `vehiclehub_excel_backup_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    showToast('Excel CSV Backup downloaded successfully! 📊', 'success');
+  } catch(e) {
+    showToast('Error exporting to Excel ❌', 'error');
+  }
 }
 
 function importAppData(event) {
