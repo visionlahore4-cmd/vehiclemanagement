@@ -83,6 +83,11 @@
       <span class="nav-label">Token &amp; Tax</span>
       <span class="dept-count-badge" id="sidebar-tokentax-count" style="margin-left: auto;">0</span>
     </a>
+    <a href="#" class="nav-item" data-page="mtag" id="nav-mtag">
+      <span class="nav-icon">🏷️</span>
+      <span class="nav-label">M-Tag</span>
+      <span class="dept-count-badge" id="sidebar-mtag-count" style="margin-left: auto;">0</span>
+    </a>
 
     <a href="#" class="nav-item" data-page="settings" id="nav-settings">
       <span class="nav-icon">⚙️</span>
@@ -520,6 +525,46 @@
             </tr>
           </thead>
           <tbody id="tokentaxBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─── M-TAG ─── -->
+    <section class="page" id="page-mtag">
+      <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div>
+          <h1 style="font-size:1.8rem; font-weight:800; color:var(--text); margin-bottom:4px;">M-Tag</h1>
+          <p class="page-sub" style="font-size:0.95rem; color:var(--text-muted);">Manage motorway M-Tag accounts for Admin &amp; Sale vehicles</p>
+        </div>
+        <button class="btn-primary" onclick="openMTagModal()">
+          <span class="btn-icon">+</span> Add M-Tag Entry
+        </button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="mtagSearch" class="filter-input" placeholder="Search by plate, account no or name..." oninput="renderMTag()" style="width: 320px;" />
+        <select id="mtagTypeFilter" class="filter-input" onchange="renderMTag()" style="width:160px;">
+          <option value="">All Types</option>
+          <option value="Admin">Admin Vehicle</option>
+          <option value="Sale">Sale Vehicle</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="mtagTable">
+          <thead>
+            <tr>
+              <th>SR</th>
+              <th>Vehicle Type</th>
+              <th>Reg No</th>
+              <th>Model / Make</th>
+              <th>Driver / Assign</th>
+              <th>M-Tag Account No</th>
+              <th>Balance (PKR)</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mtagBody"></tbody>
         </table>
       </div>
     </section>
@@ -1230,6 +1275,73 @@
       <div class="modal-actions" style="margin-top:16px;">
         <button type="button" class="btn-secondary" onclick="closeModal('fuelModal')">Cancel</button>
         <button type="submit" class="btn-primary">Save All Entries</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- M-Tag Add Entry Modal -->
+<div class="modal-overlay" id="mtagModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="mtagModalTitle">Add M-Tag Entry</h2>
+      <button class="modal-close" onclick="closeModal('mtagModal')">✕</button>
+    </div>
+    <form id="mtagForm" class="modal-form">
+      <input type="hidden" id="mtagEditId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label>Vehicle Type *</label>
+          <select id="mtagVehicleType" required onchange="populateMTagVehicles()">
+            <option value="">Select Type</option>
+            <option value="Admin">Admin Vehicle</option>
+            <option value="Sale">Sale Vehicle</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Reg No (Plate) *</label>
+          <select id="mtagPlate" required>
+            <option value="">-- Select Vehicle Type First --</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Model / Make</label>
+          <input type="text" id="mtagModel" placeholder="e.g. Toyota Hilux" />
+        </div>
+        <div class="form-group">
+          <label>Driver / Assign Name *</label>
+          <input type="text" id="mtagAssign" required placeholder="e.g. Ali Hassan" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>M-Tag Account No *</label>
+          <input type="text" id="mtagAccountNo" required placeholder="e.g. MT-0012345" />
+        </div>
+        <div class="form-group">
+          <label>Balance (PKR)</label>
+          <input type="number" id="mtagBalance" placeholder="e.g. 5000" min="0" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Status</label>
+          <select id="mtagStatus" required>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Low Balance">Low Balance</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="mtagDate" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('mtagModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save Entry</button>
       </div>
     </form>
   </div>

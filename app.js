@@ -234,7 +234,7 @@ function navigate(page) {
     drivers: 'Drivers', maintenance: 'Maintenance',
     fuel: 'Fuel Log', reports: 'Reports',
     departments: 'Departments', bills: 'Bill View',
-    settings: 'System Settings', tokentax: 'Token & Tax'
+    settings: 'System Settings', tokentax: 'Token & Tax', mtag: 'M-Tag'
   }[page] || page;
   renderPage(page);
   // Close sidebar on mobile
@@ -258,6 +258,7 @@ function renderPage(page) {
   if (page === 'departments') renderDepartments();
   if (page === 'settings')    renderSettings();
   if (page === 'tokentax')    renderTokenTax();
+  if (page === 'mtag')        renderMTag();
   renderSidebarDeptVehicles();
 }
 
@@ -1175,7 +1176,139 @@ document.getElementById('tokenTaxForm').addEventListener('submit', e => {
   showToast('Token Tax Vehicle added!', 'success');
 });
 
+// ─── M-TAG ───────────────────────────────────────────────────────────────────
+
+function renderMTag() {
+  if (!state.mtag) state.mtag = [];
+  const search = (document.getElementById('mtagSearch')?.value || '').toLowerCase();
+  const typeFilter = document.getElementById('mtagTypeFilter')?.value || '';
+  const tbody = document.getElementById('mtagBody');
+  if (!tbody) return;
+
+  let entries = state.mtag;
+  if (typeFilter) entries = entries.filter(e => e.vehicleType === typeFilter);
+  if (search) entries = entries.filter(e =>
+    (e.plate || '').toLowerCase().includes(search) ||
+    (e.accountNo || '').toLowerCase().includes(search) ||
+    (e.assign || '').toLowerCase().includes(search)
+  );
+
+  if (entries.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text-muted);">No M-Tag entries found. Click "+ Add M-Tag Entry" to begin.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = entries.map((e, i) => {
+    const statusColor = e.status === 'Active' ? '#22c55e' : e.status === 'Low Balance' ? '#f59e0b' : '#ef4444';
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><span style="background:${e.vehicleType==='Admin'?'#3b82f6':'#8b5cf6'};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.82rem;">${e.vehicleType||'—'}</span></td>
+      <td><strong>${e.plate||'—'}</strong></td>
+      <td>${e.model||'—'}</td>
+      <td>${e.assign||'—'}</td>
+      <td><code style="background:var(--card);padding:2px 8px;border-radius:6px;">${e.accountNo||'—'}</code></td>
+      <td><strong>PKR ${Number(e.balance||0).toLocaleString()}</strong></td>
+      <td><span style="color:${statusColor};font-weight:700;">${e.status||'—'}</span></td>
+      <td>${e.date||'—'}</td>
+      <td>
+        <button class="btn-icon-sm" onclick="editMTagEntry('${e.id}')" title="Edit">✏️</button>
+        <button class="btn-icon-sm" onclick="deleteMTagEntry('${e.id}')" title="Delete" style="color:#ef4444;">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openMTagModal(id) {
+  if (!state.mtag) state.mtag = [];
+  document.getElementById('mtagForm').reset();
+  document.getElementById('mtagEditId').value = '';
+  document.getElementById('mtagModalTitle').textContent = 'Add M-Tag Entry';
+  document.getElementById('mtagDate').value = new Date().toISOString().split('T')[0];
+  if (id) {
+    const entry = state.mtag.find(e => e.id === id);
+    if (entry) {
+      document.getElementById('mtagModalTitle').textContent = 'Edit M-Tag Entry';
+      document.getElementById('mtagEditId').value = entry.id;
+      document.getElementById('mtagVehicleType').value = entry.vehicleType || '';
+      populateMTagVehicles(entry.plate);
+      document.getElementById('mtagModel').value = entry.model || '';
+      document.getElementById('mtagAssign').value = entry.assign || '';
+      document.getElementById('mtagAccountNo').value = entry.accountNo || '';
+      document.getElementById('mtagBalance').value = entry.balance || '';
+      document.getElementById('mtagStatus').value = entry.status || 'Active';
+      document.getElementById('mtagDate').value = entry.date || '';
+    }
+  } else {
+    populateMTagVehicles();
+  }
+  openModal('mtagModal');
+}
+
+function editMTagEntry(id) {
+  openMTagModal(id);
+}
+
+function deleteMTagEntry(id) {
+  if (!confirm('Are you sure you want to delete this M-Tag entry?')) return;
+  state.mtag = (state.mtag || []).filter(e => e.id !== id);
+  saveState();
+  renderMTag();
+  updateDashStats();
+  showToast('M-Tag entry deleted.', 'success');
+}
+
+function populateMTagVehicles(selectedPlate) {
+  const type = document.getElementById('mtagVehicleType').value;
+  const sel = document.getElementById('mtagPlate');
+  if (!type) {
+    sel.innerHTML = '<option value="">-- Select Vehicle Type First --</option>';
+    return;
+  }
+  // Admin = non-Motorcycle vehicles; Sale = all vehicles (filter by dept or type)
+  let filtered = state.vehicles || [];
+  if (type === 'Admin') {
+    filtered = filtered.filter(v => v.type !== 'Motorcycle' && v.type !== 'Bike');
+  } else if (type === 'Sale') {
+    filtered = filtered.filter(v => v.type === 'Motorcycle' || v.dept === 'Sales' || v.dept === 'Sale');
+    // If no specific sale vehicles, show all for flexibility
+    if (filtered.length === 0) filtered = state.vehicles || [];
+  }
+  sel.innerHTML = '<option value="">-- Select Vehicle --</option>' +
+    filtered.map(v => `<option value="${v.plate}" ${v.plate === selectedPlate ? 'selected' : ''}>${v.plate} — ${v.name||''}</option>`).join('');
+}
+
+document.getElementById('mtagForm').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!state.mtag) state.mtag = [];
+  const editId = document.getElementById('mtagEditId').value;
+  const entry = {
+    id:          editId || uid(),
+    vehicleType: document.getElementById('mtagVehicleType').value,
+    plate:       document.getElementById('mtagPlate').value,
+    model:       document.getElementById('mtagModel').value.trim(),
+    assign:      document.getElementById('mtagAssign').value.trim(),
+    accountNo:   document.getElementById('mtagAccountNo').value.trim(),
+    balance:     document.getElementById('mtagBalance').value,
+    status:      document.getElementById('mtagStatus').value,
+    date:        document.getElementById('mtagDate').value,
+  };
+  if (editId) {
+    state.mtag = state.mtag.map(x => x.id === editId ? entry : x);
+    showToast('M-Tag entry updated! 🏷️', 'success');
+  } else {
+    state.mtag.push(entry);
+    showToast('M-Tag entry added! 🏷️', 'success');
+  }
+  saveState();
+  renderMTag();
+  updateDashStats();
+  closeModal('mtagModal');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 document.getElementById('vehicleForm').addEventListener('submit', e => {
+
   e.preventDefault();
   const vehicle = {
     id:              editingId.vehicle || uid(),
@@ -1756,6 +1889,9 @@ function updateDashStats() {
 
   const totalTokenBadge = document.getElementById('sidebar-tokentax-count');
   if (totalTokenBadge) totalTokenBadge.textContent = state.vehicles.filter(v => v.etag || v.envTag).length;
+
+  const totalMtagBadge = document.getElementById('sidebar-mtag-count');
+  if (totalMtagBadge) totalMtagBadge.textContent = (state.mtag || []).length;
 }
 
 // ─── Notification Button ───
@@ -2483,9 +2619,29 @@ function importAppData(event) {
       const parsed = JSON.parse(e.target.result);
       if (parsed.vehicles && parsed.drivers) {
         state = parsed;
+        // Make sure Firebase keys are preserved
+        if (!state.settings.firebase || !state.settings.firebase.apiKey) {
+          state.settings.firebase = {
+            apiKey: "AIzaSyBbVxKnrdPCL27G-c0HAQAUdVqQBtKjTO8",
+            authDomain: "my-project-vehicle-management.firebaseapp.com",
+            databaseURL: "https://my-project-vehicle-management-default-rtdb.firebaseio.com",
+            projectId: "my-project-vehicle-management"
+          };
+        }
         saveState();
+        // Push to Firebase if connected
+        if (window.firebaseDbRef) {
+          window.firebaseDbRef.set(state)
+            .then(() => {
+              showToast('Data imported & synced to Cloud! ✅🌐', 'success');
+            })
+            .catch(err => {
+              showToast('Imported locally but Cloud sync failed: ' + err.message, 'warning');
+            });
+        } else {
+          showToast('Data imported successfully! ✅', 'success');
+        }
         loadState();
-        showToast('Data imported successfully! ✅', 'success');
         navigate('dashboard');
       } else {
         showToast('Invalid backup file structure ❌', 'error');
