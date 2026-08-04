@@ -1185,37 +1185,115 @@ function renderMTag() {
   const tbody = document.getElementById('mtagBody');
   if (!tbody) return;
 
-  let entries = state.mtag;
-  if (typeFilter) entries = entries.filter(e => e.vehicleType === typeFilter);
-  if (search) entries = entries.filter(e =>
-    (e.plate || '').toLowerCase().includes(search) ||
-    (e.accountNo || '').toLowerCase().includes(search) ||
-    (e.assign || '').toLowerCase().includes(search)
-  );
+  // Flatten all vehicle rows from all M-Tag entries for display
+  let rows = [];
+  state.mtag.forEach(entry => {
+    (entry.vehicles || []).forEach((v, vi) => {
+      if (typeFilter && v.vehicleType !== typeFilter) return;
+      if (search && !(v.plate || '').toLowerCase().includes(search) &&
+          !(v.accountNo || '').toLowerCase().includes(search) &&
+          !(v.assign || '').toLowerCase().includes(search) &&
+          !(entry.billNo || '').toLowerCase().includes(search)) return;
+      rows.push({ ...v, billNo: entry.billNo, billDate: entry.date, entryId: entry.id, rowIdx: vi });
+    });
+  });
 
-  if (entries.length === 0) {
+  if (rows.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text-muted);">No M-Tag entries found. Click "+ Add M-Tag Entry" to begin.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = entries.map((e, i) => {
-    const statusColor = e.status === 'Active' ? '#22c55e' : e.status === 'Low Balance' ? '#f59e0b' : '#ef4444';
+  tbody.innerHTML = rows.map((r, i) => {
+    const typeColor = r.vehicleType === 'Admin' ? '#3b82f6' : '#8b5cf6';
     return `<tr>
       <td>${i + 1}</td>
-      <td><span style="background:${e.vehicleType==='Admin'?'#3b82f6':'#8b5cf6'};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.82rem;">${e.vehicleType||'—'}</span></td>
-      <td><strong>${e.plate||'—'}</strong></td>
-      <td>${e.model||'—'}</td>
-      <td>${e.assign||'—'}</td>
-      <td><code style="background:var(--card);padding:2px 8px;border-radius:6px;">${e.accountNo||'—'}</code></td>
-      <td><strong>PKR ${Number(e.balance||0).toLocaleString()}</strong></td>
-      <td><span style="color:${statusColor};font-weight:700;">${e.status||'—'}</span></td>
-      <td>${e.date||'—'}</td>
+      <td><span style="background:${typeColor};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.82rem;">${r.vehicleType || '—'}</span></td>
+      <td><strong>${r.plate || '—'}</strong></td>
+      <td>${r.model || '—'}</td>
+      <td>${r.assign || '—'}</td>
+      <td><code style="background:var(--card);padding:2px 8px;border-radius:6px;">${r.accountNo || '—'}</code></td>
+      <td><strong>PKR ${Number(r.toll || 0).toLocaleString()}</strong></td>
+      <td><strong style="color:#22c55e;">PKR ${Number(r.topup || 0).toLocaleString()}</strong></td>
+      <td>${r.billDate || '—'}</td>
       <td>
-        <button class="btn-icon-sm" onclick="editMTagEntry('${e.id}')" title="Edit">✏️</button>
-        <button class="btn-icon-sm" onclick="deleteMTagEntry('${e.id}')" title="Delete" style="color:#ef4444;">🗑️</button>
+        <button class="btn-icon-sm" onclick="editMTagEntry('${r.entryId}')" title="Edit">✏️</button>
+        <button class="btn-icon-sm" onclick="deleteMTagEntry('${r.entryId}')" title="Delete" style="color:#ef4444;">🗑️</button>
       </td>
     </tr>`;
   }).join('');
+}
+
+// M-Tag page table columns are now: SR, Type, Reg No, Model, Driver, Acc No, Toll, Top-up, Date, Actions
+// Update the page table headers to match
+(function updateMTagTableHeaders() {
+  const thead = document.querySelector('#mtagTable thead tr');
+  if (thead) {
+    thead.innerHTML = `<th>SR</th><th>Vehicle Type</th><th>Reg No</th><th>Model / Make</th><th>Driver / Assign</th><th>M-Tag Account No</th><th>Toll (PKR)</th><th>Top-up (PKR)</th><th>Date</th><th>Actions</th>`;
+  }
+})();
+
+let _mtagRowCounter = 0;
+
+function addMTagVehicleRow(data) {
+  _mtagRowCounter++;
+  const tbody = document.getElementById('mtagVehicleRows');
+  if (!tbody) return;
+  const idx = _mtagRowCounter;
+  const tr = document.createElement('tr');
+  tr.id = 'mtagRow_' + idx;
+  tr.innerHTML = `
+    <td><select name="mtagRowType_${idx}" style="width:90px;padding:4px;" onchange="onMTagRowTypeChange(${idx})">
+      <option value="Admin" ${(data?.vehicleType||'Admin')==='Admin'?'selected':''}>Admin</option>
+      <option value="Sale" ${(data?.vehicleType)==='Sale'?'selected':''}>Sale</option>
+    </select></td>
+    <td><input type="text" name="mtagRowPlate_${idx}" style="width:100px;padding:4px;" value="${data?.plate||''}" placeholder="Plate No" /></td>
+    <td><input type="text" name="mtagRowModel_${idx}" style="width:100px;padding:4px;" value="${data?.model||''}" placeholder="Model" /></td>
+    <td><input type="text" name="mtagRowAssign_${idx}" style="width:100px;padding:4px;" value="${data?.assign||''}" placeholder="Driver" /></td>
+    <td><input type="text" name="mtagRowAccNo_${idx}" style="width:100px;padding:4px;" value="${data?.accountNo||''}" placeholder="Acc No" /></td>
+    <td><input type="number" name="mtagRowToll_${idx}" style="width:80px;padding:4px;" value="${data?.toll||''}" placeholder="0" min="0" oninput="updateMTagTotals()" /></td>
+    <td><input type="number" name="mtagRowTopup_${idx}" style="width:80px;padding:4px;" value="${data?.topup||''}" placeholder="0" min="0" oninput="updateMTagTotals()" /></td>
+    <td style="text-align:center;"><button type="button" onclick="removeMTagRow(${idx})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  updateMTagTotals();
+}
+
+function removeMTagRow(idx) {
+  const row = document.getElementById('mtagRow_' + idx);
+  if (row) row.remove();
+  updateMTagTotals();
+}
+
+function updateMTagTotals() {
+  let totalToll = 0, totalTopup = 0;
+  document.querySelectorAll('#mtagVehicleRows tr').forEach(tr => {
+    const tollInput = tr.querySelector('input[name^="mtagRowToll"]');
+    const topupInput = tr.querySelector('input[name^="mtagRowTopup"]');
+    if (tollInput) totalToll += Number(tollInput.value) || 0;
+    if (topupInput) totalTopup += Number(topupInput.value) || 0;
+  });
+  const tollEl = document.getElementById('mtagTotalToll');
+  const topupEl = document.getElementById('mtagTotalTopup');
+  const grandEl = document.getElementById('mtagGrandTotal');
+  if (tollEl) tollEl.textContent = 'PKR ' + totalToll.toLocaleString();
+  if (topupEl) topupEl.textContent = 'PKR ' + totalTopup.toLocaleString();
+  if (grandEl) grandEl.textContent = 'PKR ' + (totalToll + totalTopup).toLocaleString();
+}
+
+function getMTagVehicleRows() {
+  const rows = [];
+  document.querySelectorAll('#mtagVehicleRows tr').forEach(tr => {
+    const id = tr.id.replace('mtagRow_', '');
+    const vehicleType = tr.querySelector(`select[name="mtagRowType_${id}"]`)?.value || 'Admin';
+    const plate = tr.querySelector(`input[name="mtagRowPlate_${id}"]`)?.value.trim() || '';
+    const model = tr.querySelector(`input[name="mtagRowModel_${id}"]`)?.value.trim() || '';
+    const assign = tr.querySelector(`input[name="mtagRowAssign_${id}"]`)?.value.trim() || '';
+    const accountNo = tr.querySelector(`input[name="mtagRowAccNo_${id}"]`)?.value.trim() || '';
+    const toll = Number(tr.querySelector(`input[name="mtagRowToll_${id}"]`)?.value) || 0;
+    const topup = Number(tr.querySelector(`input[name="mtagRowTopup_${id}"]`)?.value) || 0;
+    if (plate || accountNo) rows.push({ vehicleType, plate, model, assign, accountNo, toll, topup });
+  });
+  return rows;
 }
 
 function openMTagModal(id) {
@@ -1223,23 +1301,28 @@ function openMTagModal(id) {
   document.getElementById('mtagForm').reset();
   document.getElementById('mtagEditId').value = '';
   document.getElementById('mtagModalTitle').textContent = 'Add M-Tag Entry';
-  document.getElementById('mtagDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('mtagBillDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('mtagVehicleRows').innerHTML = '';
+  _mtagRowCounter = 0;
+
   if (id) {
     const entry = state.mtag.find(e => e.id === id);
     if (entry) {
       document.getElementById('mtagModalTitle').textContent = 'Edit M-Tag Entry';
       document.getElementById('mtagEditId').value = entry.id;
-      document.getElementById('mtagVehicleType').value = entry.vehicleType || '';
-      populateMTagVehicles(entry.plate);
-      document.getElementById('mtagModel').value = entry.model || '';
-      document.getElementById('mtagAssign').value = entry.assign || '';
-      document.getElementById('mtagAccountNo').value = entry.accountNo || '';
-      document.getElementById('mtagBalance').value = entry.balance || '';
-      document.getElementById('mtagStatus').value = entry.status || 'Active';
-      document.getElementById('mtagDate').value = entry.date || '';
+      document.getElementById('mtagBillNo').value = entry.billNo || '';
+      document.getElementById('mtagBillDate').value = entry.date || '';
+      document.getElementById('mtagVendor').value = entry.vendor || '';
+      document.getElementById('mtagPeriod').value = entry.period || '';
+      document.getElementById('mtagBillStatus').value = entry.status || 'Pending';
+      document.getElementById('mtagNotes').value = entry.notes || '';
+      (entry.vehicles || []).forEach(v => addMTagVehicleRow(v));
     }
   } else {
-    populateMTagVehicles();
+    // Auto bill number
+    const mtagCount = (state.mtag || []).length + 1;
+    document.getElementById('mtagBillNo').value = 'MT-' + new Date().getFullYear() + '-' + String(mtagCount).padStart(3, '0');
+    addMTagVehicleRow(); // Start with one empty row
   }
   openModal('mtagModal');
 }
@@ -1249,59 +1332,91 @@ function editMTagEntry(id) {
 }
 
 function deleteMTagEntry(id) {
-  if (!confirm('Are you sure you want to delete this M-Tag entry?')) return;
+  if (!confirm('Are you sure you want to delete this M-Tag entry and its bill?')) return;
   state.mtag = (state.mtag || []).filter(e => e.id !== id);
+  // Also remove associated bill
+  if (state.bills) {
+    state.bills = state.bills.filter(b => b.mtagEntryId !== id);
+  }
   saveState();
   renderMTag();
   updateDashStats();
-  showToast('M-Tag entry deleted.', 'success');
+  if (document.getElementById('page-bills')?.classList.contains('active')) renderBills();
+  showToast('M-Tag entry & bill deleted.', 'success');
 }
 
-function populateMTagVehicles(selectedPlate) {
-  const type = document.getElementById('mtagVehicleType').value;
-  const sel = document.getElementById('mtagPlate');
-  if (!type) {
-    sel.innerHTML = '<option value="">-- Select Vehicle Type First --</option>';
-    return;
-  }
-  // Admin = non-Motorcycle vehicles; Sale = all vehicles (filter by dept or type)
-  let filtered = state.vehicles || [];
-  if (type === 'Admin') {
-    filtered = filtered.filter(v => v.type !== 'Motorcycle' && v.type !== 'Bike');
-  } else if (type === 'Sale') {
-    filtered = filtered.filter(v => v.type === 'Motorcycle' || v.dept === 'Sales' || v.dept === 'Sale');
-    // If no specific sale vehicles, show all for flexibility
-    if (filtered.length === 0) filtered = state.vehicles || [];
-  }
-  sel.innerHTML = '<option value="">-- Select Vehicle --</option>' +
-    filtered.map(v => `<option value="${v.plate}" ${v.plate === selectedPlate ? 'selected' : ''}>${v.plate} — ${v.name||''}</option>`).join('');
+function onMTagRowTypeChange(idx) {
+  // Placeholder for future vehicle filtering per row
 }
 
 document.getElementById('mtagForm').addEventListener('submit', e => {
   e.preventDefault();
   if (!state.mtag) state.mtag = [];
+  if (!state.bills) state.bills = [];
+
   const editId = document.getElementById('mtagEditId').value;
+  const vehicles = getMTagVehicleRows();
+
+  if (vehicles.length === 0) {
+    showToast('Please add at least one vehicle row!', 'error');
+    return;
+  }
+
+  const totalToll = vehicles.reduce((s, v) => s + v.toll, 0);
+  const totalTopup = vehicles.reduce((s, v) => s + v.topup, 0);
+  const grandTotal = totalToll + totalTopup;
+
   const entry = {
-    id:          editId || uid(),
-    vehicleType: document.getElementById('mtagVehicleType').value,
-    plate:       document.getElementById('mtagPlate').value,
-    model:       document.getElementById('mtagModel').value.trim(),
-    assign:      document.getElementById('mtagAssign').value.trim(),
-    accountNo:   document.getElementById('mtagAccountNo').value.trim(),
-    balance:     document.getElementById('mtagBalance').value,
-    status:      document.getElementById('mtagStatus').value,
-    date:        document.getElementById('mtagDate').value,
+    id:       editId || uid(),
+    billNo:   document.getElementById('mtagBillNo').value.trim(),
+    date:     document.getElementById('mtagBillDate').value,
+    vendor:   document.getElementById('mtagVendor').value.trim(),
+    period:   document.getElementById('mtagPeriod').value.trim(),
+    status:   document.getElementById('mtagBillStatus').value,
+    notes:    document.getElementById('mtagNotes').value.trim(),
+    vehicles: vehicles,
+    totalToll: totalToll,
+    totalTopup: totalTopup,
+    grandTotal: grandTotal,
   };
+
+  // Create/update bill in state.bills
+  const bill = {
+    id:           editId ? (state.bills.find(b => b.mtagEntryId === editId)?.id || uid()) : uid(),
+    mtagEntryId:  entry.id,
+    billNo:       entry.billNo,
+    date:         entry.date,
+    vehicle:      vehicles.map(v => v.plate).join(', '),
+    type:         'M-Tag',
+    vendor:       entry.vendor || 'M-Tag / Motorway',
+    vendorAddress: '',
+    amount:       grandTotal,
+    status:       entry.status,
+    notes:        entry.notes + (entry.period ? ' | Period: ' + entry.period : ''),
+    currentReading: '',
+    nextReading: '',
+  };
+
   if (editId) {
     state.mtag = state.mtag.map(x => x.id === editId ? entry : x);
-    showToast('M-Tag entry updated! 🏷️', 'success');
+    const existingBillIdx = state.bills.findIndex(b => b.mtagEntryId === editId);
+    if (existingBillIdx >= 0) {
+      bill.id = state.bills[existingBillIdx].id;
+      state.bills[existingBillIdx] = bill;
+    } else {
+      state.bills.push(bill);
+    }
+    showToast('M-Tag entry & bill updated! 🏷️', 'success');
   } else {
     state.mtag.push(entry);
-    showToast('M-Tag entry added! 🏷️', 'success');
+    state.bills.push(bill);
+    showToast('M-Tag entry saved & bill generated! 🏷️✅', 'success');
   }
+
   saveState();
   renderMTag();
   updateDashStats();
+  if (document.getElementById('page-bills')?.classList.contains('active')) renderBills();
   closeModal('mtagModal');
 });
 
@@ -2190,7 +2305,7 @@ function renderBills() {
     if (b.status === 'Paid') paidCount++;
     else pendingCount++;
 
-    const vName = getVehicleName(b.vehicle);
+    const vName = b.type === 'M-Tag' ? b.vehicle : getVehicleName(b.vehicle);
     
     return `
       <tr ondblclick="openInvoice('${b.id}')" style="cursor:pointer;" title="Double click to view invoice">
@@ -2241,9 +2356,10 @@ function openInvoice(id) {
   const b = state.bills.find(x => x.id === id);
   if (!b) return;
   
-  const v = state.vehicles.find(x => x.id === b.vehicle);
-  const vName = v ? v.name : 'Unknown';
-  const vPlate = v ? v.plate : '-';
+  const isMTag = b.type === 'M-Tag';
+  const v = isMTag ? null : state.vehicles.find(x => x.id === b.vehicle);
+  const vName = isMTag ? 'M-Tag Vehicles' : (v ? v.name : 'Unknown');
+  const vPlate = isMTag ? b.vehicle : (v ? v.plate : '-');
   
   const drvObj = b.driver ? state.drivers.find(d => d.id === b.driver) : (v ? state.drivers.find(d => d.id === v.driver) : null);
   const dName = drvObj ? drvObj.name : '-';

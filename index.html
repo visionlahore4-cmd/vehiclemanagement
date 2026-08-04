@@ -437,6 +437,7 @@
           <option value="">All Types</option>
           <option value="Fuel">Fuel Bill</option>
           <option value="Maintenance">Maintenance Bill</option>
+          <option value="M-Tag">M-Tag Bill</option>
           <option value="Custom">Custom / General Bill</option>
         </select>
         <select id="billStatusFilter" class="filter-select" onchange="renderBills()">
@@ -558,8 +559,8 @@
               <th>Model / Make</th>
               <th>Driver / Assign</th>
               <th>M-Tag Account No</th>
-              <th>Balance (PKR)</th>
-              <th>Status</th>
+              <th>Toll (PKR)</th>
+              <th>Top-up (PKR)</th>
               <th>Date</th>
               <th>Actions</th>
             </tr>
@@ -1282,66 +1283,80 @@
 
 <!-- M-Tag Add Entry Modal -->
 <div class="modal-overlay" id="mtagModal">
-  <div class="modal">
+  <div class="modal" style="max-width:880px;">
     <div class="modal-header">
       <h2 id="mtagModalTitle">Add M-Tag Entry</h2>
       <button class="modal-close" onclick="closeModal('mtagModal')">✕</button>
     </div>
     <form id="mtagForm" class="modal-form">
       <input type="hidden" id="mtagEditId" />
-      <div class="form-row">
-        <div class="form-group">
-          <label>Vehicle Type *</label>
-          <select id="mtagVehicleType" required onchange="populateMTagVehicles()">
-            <option value="">Select Type</option>
-            <option value="Admin">Admin Vehicle</option>
-            <option value="Sale">Sale Vehicle</option>
-          </select>
+      <!-- Bill Info Section -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+        <p style="font-weight:700;color:var(--accent);margin-bottom:10px;font-size:0.95rem;">📋 Bill Information</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Bill No *</label>
+            <input type="text" id="mtagBillNo" required placeholder="e.g. MT-2025-001" />
+          </div>
+          <div class="form-group">
+            <label>Bill Date *</label>
+            <input type="date" id="mtagBillDate" required />
+          </div>
+          <div class="form-group">
+            <label>Vendor / Supplier</label>
+            <input type="text" id="mtagVendor" placeholder="e.g. NHA M-Tag Office" />
+          </div>
         </div>
-        <div class="form-group">
-          <label>Reg No (Plate) *</label>
-          <select id="mtagPlate" required>
-            <option value="">-- Select Vehicle Type First --</option>
-          </select>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Period (Month/Year)</label>
+            <input type="text" id="mtagPeriod" placeholder="e.g. July 2025" />
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="mtagBillStatus">
+              <option value="Pending">Pending</option>
+              <option value="Paid">Paid</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Notes / Details</label>
+            <input type="text" id="mtagNotes" placeholder="Optional notes..." />
+          </div>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Model / Make</label>
-          <input type="text" id="mtagModel" placeholder="e.g. Toyota Hilux" />
+      <!-- Vehicle Rows Section -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <p style="font-weight:700;color:var(--accent);font-size:0.95rem;">🚗 Vehicle Details</p>
+          <button type="button" class="btn-primary" style="padding:4px 14px;font-size:0.82rem;" onclick="addMTagVehicleRow()">+ Add Vehicle</button>
         </div>
-        <div class="form-group">
-          <label>Driver / Assign Name *</label>
-          <input type="text" id="mtagAssign" required placeholder="e.g. Ali Hassan" />
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;" id="mtagVehicleTable">
+            <thead>
+              <tr style="background:var(--card);">
+                <th style="padding:8px;text-align:left;">Type</th>
+                <th style="padding:8px;text-align:left;">Reg No</th>
+                <th style="padding:8px;text-align:left;">Model / Make</th>
+                <th style="padding:8px;text-align:left;">Driver / Assign</th>
+                <th style="padding:8px;text-align:left;">M-Tag Acc No</th>
+                <th style="padding:8px;text-align:left;">Toll (PKR)</th>
+                <th style="padding:8px;text-align:left;">Top-up (PKR)</th>
+                <th style="padding:8px;text-align:center;">✕</th>
+              </tr>
+            </thead>
+            <tbody id="mtagVehicleRows"></tbody>
+          </table>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>M-Tag Account No *</label>
-          <input type="text" id="mtagAccountNo" required placeholder="e.g. MT-0012345" />
-        </div>
-        <div class="form-group">
-          <label>Balance (PKR)</label>
-          <input type="number" id="mtagBalance" placeholder="e.g. 5000" min="0" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Status</label>
-          <select id="mtagStatus" required>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Low Balance">Low Balance</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Date</label>
-          <input type="date" id="mtagDate" />
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;gap:20px;">
+          <span style="font-size:0.9rem;color:var(--text-muted);">Total Toll: <strong id="mtagTotalToll" style="color:var(--accent);">PKR 0</strong></span>
+          <span style="font-size:0.9rem;color:var(--text-muted);">Total Top-up: <strong id="mtagTotalTopup" style="color:#22c55e;">PKR 0</strong></span>
+          <span style="font-size:0.9rem;color:var(--text-muted);">Grand Total: <strong id="mtagGrandTotal" style="color:#f59e0b;">PKR 0</strong></span>
         </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" onclick="closeModal('mtagModal')">Cancel</button>
-        <button type="submit" class="btn-primary">Save Entry</button>
+        <button type="submit" class="btn-primary">💾 Save &amp; Generate Bill</button>
       </div>
     </form>
   </div>
@@ -1482,6 +1497,7 @@
             <option value="Custom">Custom / General</option>
             <option value="Fuel">Fuel Bill</option>
             <option value="Maintenance">Maintenance Bill</option>
+            <option value="M-Tag">M-Tag Bill</option>
           </select>
         </div>
       </div>
