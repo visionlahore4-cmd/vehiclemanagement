@@ -1,0 +1,54 @@
+Create a comprehensive "Vehicle Management Hub" web application. This must be a Single Page Application (SPA) built purely with HTML, Vanilla CSS, and Vanilla JavaScript. It should use localStorage as its primary database (no external backend required).
+
+# Design & UI/UX Requirements
+- **Theme:** Modern Dark Theme with glassmorphism effects, neon accents (emerald green and orange), and a highly premium, sleek look. Use a dark background (e.g., #0f172a).
+- **Layout:** A responsive Sidebar Navigation on the left (with icons) and a main content area on the right. 
+- **Modals:** Use clean, centered popup modals for adding/editing data.
+- **Interactions:** Add hover effects on buttons, smooth transitions, and toast notifications for success/error messages.
+
+# Core Features & Modules
+
+1. **Dashboard (Home):**
+   - Summary cards showing: Total Vehicles, Total Bikes, Monthly Fuel Cost (in PKR), and Pending Maintenance.
+   - A quick overview table of recently active vehicles.
+
+2. **Vehicles Management:**
+   - A data table to view all vehicles.
+   - Ability to Add/Edit/Delete vehicles.
+   - Fields: Vehicle No (Plate), Model Name, Vehicle Type (Car, Motorcycle, Van, Truck), Engine CC, Color, Chassis No, Engine No, Insurance Status.
+
+3. **Drivers Management:**
+   - Add/Edit/Delete drivers.
+   - Fields: Name, Phone, License No, License Expiry Date, Assigned Department.
+
+4. **Vehicle Allotment (Departments):**
+   - Allocate a vehicle to a specific department (General, SCM, Accounts, Sale, Admin, Production) and assign it to a driver.
+
+5. **Fuel Management (Crucial Logic):**
+   - Add Fuel Entries with fields: Date, Vehicle, Driver, Litres, Rate/Litre, Total Amount, Odometer Reading, and Pump Name.
+   - **Math Logic:** Automatically calculate Total Amount = Litres * Rate (round to nearest whole number, no decimals).
+   - **Average Logic:** Calculate the Fuel Average (km/L) by comparing the current Odometer reading with the previous fuel entry's Odometer reading for that specific vehicle.
+
+6. **Maintenance & Workshop:**
+   - Log maintenance bills with fields: Date, Vehicle, Workshop Name, Parts Cost, Labor Cost, Total Cost, Next Maintenance Date.
+   - Mark status as "Pending" or "Completed".
+
+7. **Token Tax & E-Tag:**
+   - A dedicated page to track Token Tax and Environmental Tags.
+   - Fields: Vehicle No, Assign Name, Token Status (Paid/Unpaid), Start Date, Expiry Date.
+
+8. **Invoicing & Printing:**
+   - A system to view generated bills/slips for Fuel and Maintenance.
+   - A "Print" button that opens a clean, printer-friendly layout (hiding the sidebar and dark mode styling during print).
+
+9. **Data Management & Backup:**
+   - An "Export Data" button that downloads the entire localStorage state as a .json file.
+   - An "Import Data" button to upload a .json file and restore the state.
+   - **Auto-Backup Logic:** Every time data is saved, save a hidden backup in localStorage. If the vehicle count suddenly drops to 0 (accidental wipe), DO NOT overwrite the hidden backup. Provide a "Restore Auto-Backup" button in the settings.
+
+# Code Structure Guidelines
+- Provide all the code in 3 structured files (or combined if necessary): index.html, style.css, and app.js.
+- Use modular JavaScript functions (e.g., renderVehicles(), renderFuel(), saveState(), loadState()).
+- Seed some initial realistic demo data (specifically 5-10 drivers belonging to a company) so the app isn't completely empty on the first load.
+
+Please write the complete, functional code for this application, ensuring the styling is extremely polished and premium.
