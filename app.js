@@ -234,7 +234,8 @@ function navigate(page) {
     drivers: 'Drivers', maintenance: 'Maintenance',
     fuel: 'Fuel Log', reports: 'Reports',
     departments: 'Departments', bills: 'Bill View',
-    settings: 'System Settings', tokentax: 'Token & Tax', mtag: 'M-Tag'
+    settings: 'System Settings', tokentax: 'Token & Tax', mtag: 'M-Tag',
+    ledger: 'Accounts / Ledger'
   }[page] || page;
   renderPage(page);
   // Close sidebar on mobile
@@ -259,17 +260,18 @@ function renderPage(page) {
   if (page === 'settings')    renderSettings();
   if (page === 'tokentax')    renderTokenTax();
   if (page === 'mtag')        renderMTag();
+  if (page === 'ledger')      renderLedger();
   renderSidebarDeptVehicles();
 }
 
 // ─── Helpers ───
 function getDriverName(id) {
   const d = state.drivers.find(x => x.id === id);
-  return d ? d.name : '—';
+  return d ? d.name : (id || '—');
 }
 function getVehicleName(id) {
   const v = state.vehicles.find(x => x.id === id);
-  return v ? v.name : '—';
+  return v ? (v.plate ? `${v.name} (${v.plate})` : v.name) : (id || '—');
 }
 function statusBadge(s) {
   const map = {
@@ -1420,6 +1422,112 @@ document.getElementById('mtagForm').addEventListener('submit', e => {
   closeModal('mtagModal');
 });
 
+// ─── ACCOUNTS / LEDGER ────────────────────────────────────────────────────────
+
+function renderLedger() {
+  if (!state.ledger) state.ledger = [];
+  const search = (document.getElementById('ledgerSearch')?.value || '').toLowerCase();
+  const typeFilter = document.getElementById('ledgerTypeFilter')?.value || '';
+  const tbody = document.getElementById('ledgerBody');
+  if (!tbody) return;
+
+  let entries = state.ledger;
+  if (typeFilter) entries = entries.filter(e => e.type === typeFilter);
+  if (search) entries = entries.filter(e =>
+    (e.desc || '').toLowerCase().includes(search)
+  );
+
+  // Sort by date descending
+  entries.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  let totalIn = 0;
+  let totalOut = 0;
+
+  tbody.innerHTML = entries.length ? entries.map((e, i) => {
+    if (e.type === 'Received') totalIn += Number(e.amount) || 0;
+    if (e.type === 'Returned') totalOut += Number(e.amount) || 0;
+    
+    const typeColor = e.type === 'Received' ? '#22c55e' : '#f59e0b';
+    const typeLabel = e.type === 'Received' ? '📥 In' : '📤 Out';
+
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><span style="background:${typeColor};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.82rem;">${typeLabel}</span></td>
+      <td>${e.date || '—'}</td>
+      <td><strong>PKR ${Number(e.amount||0).toLocaleString()}</strong></td>
+      <td>${e.desc || '—'}</td>
+      <td>
+        <button class="btn-icon-sm" onclick="editLedgerEntry('${e.id}')" title="Edit">✏️</button>
+        <button class="btn-icon-sm" onclick="deleteLedgerEntry('${e.id}')" title="Delete" style="color:#ef4444;">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);">No transactions found.</td></tr>`;
+
+  // Update cards
+  if (document.getElementById('ledger-total-in')) document.getElementById('ledger-total-in').textContent = 'PKR ' + totalIn.toLocaleString();
+  if (document.getElementById('ledger-total-out')) document.getElementById('ledger-total-out').textContent = 'PKR ' + totalOut.toLocaleString();
+  if (document.getElementById('ledger-balance')) document.getElementById('ledger-balance').textContent = 'PKR ' + (totalIn - totalOut).toLocaleString();
+}
+
+function openLedgerModal(id) {
+  if (!state.ledger) state.ledger = [];
+  document.getElementById('ledgerForm').reset();
+  document.getElementById('ledgerEditId').value = '';
+  document.getElementById('ledgerModalTitle').textContent = 'Add Transaction';
+  document.getElementById('ledgerDate').value = new Date().toISOString().split('T')[0];
+  
+  if (id) {
+    const entry = state.ledger.find(e => e.id === id);
+    if (entry) {
+      document.getElementById('ledgerModalTitle').textContent = 'Edit Transaction';
+      document.getElementById('ledgerEditId').value = entry.id;
+      document.getElementById('ledgerType').value = entry.type || 'Received';
+      document.getElementById('ledgerDate').value = entry.date || '';
+      document.getElementById('ledgerAmount').value = entry.amount || '';
+      document.getElementById('ledgerDesc').value = entry.desc || '';
+    }
+  }
+  openModal('ledgerModal');
+}
+
+function editLedgerEntry(id) {
+  openLedgerModal(id);
+}
+
+function deleteLedgerEntry(id) {
+  if (!confirm('Are you sure you want to delete this transaction?')) return;
+  state.ledger = (state.ledger || []).filter(e => e.id !== id);
+  saveState();
+  renderLedger();
+  updateDashStats();
+  showToast('Transaction deleted.', 'success');
+}
+
+document.getElementById('ledgerForm').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!state.ledger) state.ledger = [];
+  const editId = document.getElementById('ledgerEditId').value;
+  const entry = {
+    id:     editId || uid(),
+    type:   document.getElementById('ledgerType').value,
+    date:   document.getElementById('ledgerDate').value,
+    amount: document.getElementById('ledgerAmount').value,
+    desc:   document.getElementById('ledgerDesc').value.trim(),
+  };
+
+  if (editId) {
+    state.ledger = state.ledger.map(x => x.id === editId ? entry : x);
+    showToast('Transaction updated! 💰', 'success');
+  } else {
+    state.ledger.push(entry);
+    showToast('Transaction saved! 💰', 'success');
+  }
+  saveState();
+  renderLedger();
+  updateDashStats();
+  closeModal('ledgerModal');
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 document.getElementById('vehicleForm').addEventListener('submit', e => {
@@ -1523,19 +1631,19 @@ document.getElementById('addMaintenanceBtn').addEventListener('click', () => {
   document.getElementById('maintenanceDate').valueAsDate = new Date();
   document.getElementById('maintenanceCurrentReading').value = '';
   document.getElementById('maintenanceNextReading').value = '';
-  populateVehicleSelects('maintenanceVehicle', '');
-  populateDriverSelects('maintenanceDriver', '');
+  document.getElementById('maintenanceVehicle').value = '';
+  document.getElementById('maintenanceDriver').value = '';
   openModal('maintenanceModal');
 });
 
 // Auto-populate driver when vehicle is selected in maintenance form
 document.getElementById('maintenanceVehicle')?.addEventListener('change', function() {
-  const vid = this.value;
-  const vehicle = state.vehicles.find(v => v.id === vid);
+  const val = this.value;
+  const vehicle = state.vehicles.find(v => v.id === val || v.plate === val || `${v.name} (${v.plate})` === val || v.name === val);
   if (vehicle && vehicle.driver) {
-    populateDriverSelects('maintenanceDriver', vehicle.driver);
+    document.getElementById('maintenanceDriver').value = getDriverName(vehicle.driver);
   } else {
-    populateDriverSelects('maintenanceDriver', '');
+    document.getElementById('maintenanceDriver').value = '';
   }
 });
 
@@ -1554,8 +1662,8 @@ function openEditMaintenance(id) {
   document.getElementById('maintenanceNextReading').value = m.nextReading || '';
   document.getElementById('maintenanceVendor').value = m.vendor || '';
   document.getElementById('maintenanceVendorAddress').value = m.vendorAddress || '';
-  populateVehicleSelects('maintenanceVehicle', m.vehicle);
-  populateDriverSelects('maintenanceDriver', m.driver || '');
+  document.getElementById('maintenanceVehicle').value = getVehicleName(m.vehicle) || '';
+  document.getElementById('maintenanceDriver').value = m.driver ? getDriverName(m.driver) : '';
   openModal('maintenanceModal');
 }
 document.getElementById('maintenanceForm').addEventListener('submit', e => {
@@ -1658,15 +1766,10 @@ function addFuelRow(prefill = {}) {
   tr.innerHTML = `
     <td style="padding:8px;color:var(--text-muted);font-weight:600;">${idx}</td>
     <td style="padding:6px 4px;">
-      <select class="fuel-vehicle" style="width:100%;min-width:130px;padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;">
-        ${buildVehicleOptions(prefill.vehicle || '', currentDept, currentSearch)}
-      </select>
+      <input type="text" class="fuel-vehicle" list="vehicleList" value="${prefill.vehicle ? getVehicleName(prefill.vehicle) : ''}" placeholder="Vehicle / Plate" style="width:100%;min-width:130px;padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;" />
     </td>
     <td style="padding:6px 4px;">
-      <select class="fuel-driver" style="width:100%;min-width:120px;padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;">
-        <option value="">Select Driver</option>
-        ${state.drivers.map(d => `<option value="${d.id}" ${d.id === prefill.driver ? 'selected' : ''}>${d.name}</option>`).join('')}
-      </select>
+      <input type="text" class="fuel-driver" list="driverList" value="${prefill.driver ? getDriverName(prefill.driver) : ''}" placeholder="Driver Name" style="width:100%;min-width:120px;padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;" />
     </td>
     <td style="padding:6px 4px;">
       <select class="fuel-type" style="padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;">
@@ -2031,8 +2134,27 @@ function getDeptIcon(key) {
   return d ? d.icon : '🏢';
 }
 
+function updateDatalists() {
+  let vList = document.getElementById('vehicleList');
+  if (!vList) {
+    vList = document.createElement('datalist');
+    vList.id = 'vehicleList';
+    document.body.appendChild(vList);
+  }
+  vList.innerHTML = state.vehicles.map(v => `<option value="${v.name} (${v.plate})">`).join('');
+
+  let dList = document.getElementById('driverList');
+  if (!dList) {
+    dList = document.createElement('datalist');
+    dList.id = 'driverList';
+    document.body.appendChild(dList);
+  }
+  dList.innerHTML = state.drivers.map(d => `<option value="${d.name}">`).join('');
+}
+
 // Render sidebar vehicle lists under each department
 function renderSidebarDeptVehicles() {
+  updateDatalists();
   DEPARTMENTS.forEach(dept => {
     const container = document.getElementById('deptVehicles-' + dept.key);
     if (!container) return;
@@ -2426,8 +2548,45 @@ function openInvoice(id) {
     // Status Stamp for Fuel Invoice (Disabled)
     const stampFuel = document.getElementById('invStampFuelSimple');
     if (stampFuel) stampFuel.style.display = 'none';
+  } else if (isMTag) {
+    document.getElementById('invoiceSheet').style.display = 'none';
+    document.getElementById('fuelInvoiceSheet').style.display = 'none';
+    if(document.getElementById('mtagInvoiceSheet')) document.getElementById('mtagInvoiceSheet').style.display = 'flex';
+    
+    document.getElementById('invBillNoMTagField').textContent = b.billNo || '-';
+    document.getElementById('invBillDateMTagField').textContent = formatDate(b.date);
+    document.getElementById('invVendorMTagField').textContent = b.vendor || 'NHA / Motorway';
+    
+    // Period is in notes (e.g. Period: June 2026)
+    let periodMatch = b.notes.match(/Period:\s*([^|]+)/);
+    document.getElementById('invPeriodMTagField').textContent = periodMatch ? periodMatch[1].trim() : '-';
+
+    const mtagEntry = state.mtag.find(m => m.id === b.mtagEntryId);
+    let tbodyHtml = '';
+    let totToll = 0;
+    let totTopup = 0;
+
+    if (mtagEntry && mtagEntry.vehicles) {
+      mtagEntry.vehicles.forEach(vRow => {
+        totToll += Number(vRow.toll) || 0;
+        totTopup += Number(vRow.topup) || 0;
+        tbodyHtml += `<tr style="border-bottom:1px solid #cbd5e1;">
+          <td style="padding:10px; border:1px solid #cbd5e1; font-weight:700; color:#1e3a8a;">${vRow.plate}</td>
+          <td style="padding:10px; border:1px solid #cbd5e1; color:#0f172a;">${getDriverName(vRow.assign) || vRow.assign || '-'}</td>
+          <td style="padding:10px; border:1px solid #cbd5e1; color:#0f172a;">${vRow.accountNo || '-'}</td>
+          <td style="padding:10px; border:1px solid #cbd5e1; text-align:right; color:#0f172a;">${Number(vRow.toll).toLocaleString()}</td>
+          <td style="padding:10px; border:1px solid #cbd5e1; text-align:right; color:#22c55e;">${Number(vRow.topup).toLocaleString()}</td>
+        </tr>`;
+      });
+    }
+
+    document.getElementById('mtagInvoiceBody').innerHTML = tbodyHtml;
+    document.getElementById('mtagInvoiceTotalToll').textContent = totToll.toLocaleString();
+    document.getElementById('mtagInvoiceTotalTopup').textContent = totTopup.toLocaleString();
+
   } else {
     document.getElementById('fuelInvoiceSheet').style.display = 'none';
+    if(document.getElementById('mtagInvoiceSheet')) document.getElementById('mtagInvoiceSheet').style.display = 'none';
     document.getElementById('invoiceSheet').style.display = 'block';
 
     document.getElementById('invCompanyNameSimple').textContent = companyName;
