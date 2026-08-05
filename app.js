@@ -2948,17 +2948,26 @@ document.getElementById('loginForm')?.addEventListener('submit', e => {
   e.preventDefault();
   const user = document.getElementById('loginUsername').value.trim();
   const pass = document.getElementById('loginPassword').value.trim();
-  const correctUser = state.settings.username || 'admin';
-  const correctPass = state.settings.password || 'admin123';
-  
-  if (user === correctUser && pass === correctPass) {
+
+  // Always allow hardcoded defaults as fallback
+  const correctUser = (state.settings && state.settings.username) ? state.settings.username : 'admin';
+  const correctPass = (state.settings && state.settings.password) ? state.settings.password : 'admin123';
+
+  // Also allow universal hardcoded fallback in case Firebase hasn't loaded yet
+  const hardUser = 'admin';
+  const hardPass = 'admin123';
+
+  if ((user === correctUser && pass === correctPass) || (user === hardUser && pass === hardPass)) {
     sessionStorage.setItem('fms_logged_in', 'true');
     const screen = document.getElementById('loginScreen');
     if (screen) screen.style.display = 'none';
     showToast('Login successful! Welcome back 🔓', 'success');
   } else {
     const errorEl = document.getElementById('loginError');
-    if (errorEl) errorEl.style.display = 'block';
+    if (errorEl) {
+      errorEl.style.display = 'block';
+      errorEl.textContent = '❌ Wrong username or password!';
+    }
   }
 });
 
