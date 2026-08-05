@@ -88,6 +88,11 @@
       <span class="nav-label">M-Tag</span>
       <span class="dept-count-badge" id="sidebar-mtag-count" style="margin-left: auto;">0</span>
     </a>
+    <a href="#" class="nav-item" data-page="ledger" id="nav-ledger">
+      <span class="nav-icon">💰</span>
+      <span class="nav-label">Accounts / Ledger</span>
+      <span class="dept-count-badge" id="sidebar-ledger-count" style="margin-left: auto;">0</span>
+    </a>
 
     <a href="#" class="nav-item" data-page="settings" id="nav-settings">
       <span class="nav-icon">⚙️</span>
@@ -566,6 +571,70 @@
             </tr>
           </thead>
           <tbody id="mtagBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─── ACCOUNTS / LEDGER ─── -->
+    <section class="page" id="page-ledger">
+      <div class="page-header" style="align-items:flex-start;">
+        <div>
+          <h1 style="font-size:1.8rem; font-weight:800; color:var(--text); margin-bottom:4px;">Accounts / Ledger</h1>
+          <p class="page-sub" style="font-size:0.95rem; color:var(--text-muted);">Track payments received and bills returned</p>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn-primary" onclick="openLedgerModal()">
+            <span class="btn-icon">+</span> Add Transaction
+          </button>
+        </div>
+      </div>
+      
+      <div class="stats-grid" style="margin-bottom:20px;">
+        <div class="stat-card card-green">
+          <div class="stat-icon">📥</div>
+          <div class="stat-info">
+            <span class="stat-value" id="ledger-total-in">PKR 0</span>
+            <span class="stat-label">Total Received (In)</span>
+          </div>
+        </div>
+        <div class="stat-card card-orange">
+          <div class="stat-icon">📤</div>
+          <div class="stat-info">
+            <span class="stat-value" id="ledger-total-out">PKR 0</span>
+            <span class="stat-label">Total Returned / Paid (Out)</span>
+          </div>
+        </div>
+        <div class="stat-card card-blue">
+          <div class="stat-icon">💰</div>
+          <div class="stat-info">
+            <span class="stat-value" id="ledger-balance">PKR 0</span>
+            <span class="stat-label">Current Balance</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <input type="text" id="ledgerSearch" class="filter-input" placeholder="Search transactions..." oninput="renderLedger()" />
+        <select id="ledgerTypeFilter" class="filter-select" onchange="renderLedger()">
+          <option value="">All Types</option>
+          <option value="Received">Received (In)</option>
+          <option value="Returned">Returned (Out)</option>
+        </select>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table" id="ledgerTable">
+          <thead>
+            <tr>
+              <th>SR</th>
+              <th>Type</th>
+              <th>Date</th>
+              <th>Amount (PKR)</th>
+              <th>Description / Reference</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ledgerBody"></tbody>
         </table>
       </div>
     </section>
@@ -1132,15 +1201,11 @@
       <div class="form-row">
         <div class="form-group">
           <label>Vehicle *</label>
-          <select id="maintenanceVehicle" required>
-            <option value="">Select Vehicle</option>
-          </select>
+          <input type="text" id="maintenanceVehicle" list="vehicleList" placeholder="Select or type vehicle..." required />
         </div>
         <div class="form-group">
           <label>Driver</label>
-          <select id="maintenanceDriver">
-            <option value="">Select Driver</option>
-          </select>
+          <input type="text" id="maintenanceDriver" list="driverList" placeholder="Select or type driver..." />
         </div>
       </div>
       <div class="form-row">
@@ -1357,6 +1422,46 @@
       <div class="modal-actions">
         <button type="button" class="btn-secondary" onclick="closeModal('mtagModal')">Cancel</button>
         <button type="submit" class="btn-primary">💾 Save &amp; Generate Bill</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Ledger Add Entry Modal -->
+<div class="modal-overlay" id="ledgerModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="ledgerModalTitle">Add Transaction</h2>
+      <button class="modal-close" onclick="closeModal('ledgerModal')">✕</button>
+    </div>
+    <form id="ledgerForm" class="modal-form">
+      <input type="hidden" id="ledgerEditId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label>Transaction Type *</label>
+          <select id="ledgerType" required>
+            <option value="Received">Payment Received (In)</option>
+            <option value="Returned">Bill Returned / Paid (Out)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="ledgerDate" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Amount (PKR) *</label>
+          <input type="number" id="ledgerAmount" required placeholder="e.g. 5000" min="0" />
+        </div>
+        <div class="form-group">
+          <label>Description / Reference</label>
+          <input type="text" id="ledgerDesc" placeholder="e.g. Returned M-Tag bill #123" required />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('ledgerModal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save Transaction</button>
       </div>
     </form>
   </div>
@@ -1709,6 +1814,81 @@
           <div id="invStampFuelSimple"></div>
         </div>
       </div>
+
+      <!-- Signatures & Footer -->
+      <div>
+        <!-- Signatures -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:50px; text-align:center; padding:0 20px;">
+          <div style="width:200px;">
+            <div style="border-top:2px solid #0f172a; padding-top:8px;">
+              <strong style="font-size:0.95rem; color:#0f172a;">Admin Officer</strong>
+            </div>
+          </div>
+          <div style="width:200px;">
+            <div style="border-top:2px solid #0f172a; padding-top:8px;">
+              <strong style="font-size:0.95rem; color:#0f172a;">Fleet Manager</strong>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Bottom Footer line -->
+        <div style="text-align:center; margin-top:40px; border-top:1px solid #e2e8f0; padding-top:15px; font-size:0.8rem; color:#64748b;">
+          Vision Food &amp; Packaging • Sunder Industrial Estate, Raiwind, Lahore
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── M-TAG INVOICE FORMAT ─── -->
+    <div id="mtagInvoiceSheet" style="display:none; padding:40px; font-family:'Outfit', sans-serif; background:#fff; color:#0f172a; min-height:297mm; box-sizing:border-box; flex-direction:column; justify-content:space-between;">
+      <div>
+        <!-- Top Row -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f172a; padding-bottom:20px; margin-bottom:20px;">
+          <div style="width: 50%;">
+            <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
+              <img src="logo.jpg" alt="Logo" class="logo-img" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;" />
+              <div>
+                <h2 style="margin:0; font-size:1.4rem; font-weight:800; color:#1e3a8a;">Vision Food &amp; Packaging</h2>
+                <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Fleet Management Department</span>
+              </div>
+            </div>
+            <div style="font-size:0.9rem; color:#334155; line-height:1.6;">
+              <div><strong>Company Name:</strong> <span>Vision Food &amp; Packaging</span></div>
+              <div><strong>Report Type:</strong> <span>M-Tag Toll & Top-up Voucher</span></div>
+            </div>
+          </div>
+          <div style="width: 45%; text-align: right; font-size:0.9rem; color:#334155; line-height:1.6;">
+            <h3 style="color:#1e3a8a; margin:0 0 10px 0; font-size:1.1rem; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">Voucher Details</h3>
+            <div><strong>Voucher No:</strong> <strong id="invBillNoMTagField" style="color:#1e3a8a;">-</strong></div>
+            <div><strong>Date Generated:</strong> <span id="invBillDateMTagField">-</span></div>
+            <div><strong>Vendor:</strong> <span id="invVendorMTagField">-</span></div>
+            <div><strong>Period:</strong> <span id="invPeriodMTagField">-</span></div>
+          </div>
+        </div>
+
+        <!-- Items Table -->
+        <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.9rem;">
+          <thead>
+            <tr style="background:#ffffff; color:#1e3a8a; text-transform:uppercase; font-size:0.8rem;">
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a;">VEHICLE NO#</th>
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a;">DRIVER / ASSIGN</th>
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a;">ACCOUNT NO</th>
+              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;">TOLL (PKR)</th>
+              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;">TOP-UP (PKR)</th>
+            </tr>
+          </thead>
+          <tbody id="mtagInvoiceBody" style="color:#0f172a;">
+            <!-- Populated by JS -->
+          </tbody>
+          <tfoot>
+            <tr style="background:#f8fafc; font-weight:800; font-size:1rem;">
+              <td colspan="3" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1;">GRAND TOTAL</td>
+              <td id="mtagInvoiceTotalToll" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;">0</td>
+              <td id="mtagInvoiceTotalTopup" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1; color:#22c55e;">0</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
 
       <!-- Signatures & Footer -->
       <div>
