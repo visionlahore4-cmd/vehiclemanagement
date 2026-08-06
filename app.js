@@ -678,6 +678,9 @@ function renderFuel() {
     const primaryVehicle = b.entries[0] ? getVehicleName(b.entries[0].vehicle) : 'Unknown';
     const vehDisplay = b.count > 1 ? `${primaryVehicle} + ${b.count - 1} more` : primaryVehicle;
     const rate = b.litres > 0 ? (b.cost / b.litres).toFixed(2) : '—';
+    // Get average for the primary vehicle in this batch if it exists
+    const avg = b.entries[0] && b.entries[0].fuelAverage ? b.entries[0].fuelAverage : '—';
+    
     return `
     <tr ondblclick="openEditFuelBatch('${b.batchId}')" style="cursor:pointer;" title="Double click to edit">
       <td>${i+1}</td>
@@ -686,6 +689,7 @@ function renderFuel() {
       <td>${b.litres.toFixed(2)} L</td>
       <td>${rate !== '—' ? 'PKR ' + rate : '—'}</td>
       <td>${fmtPKR(b.cost)}</td>
+      <td><span style="color:var(--primary);font-weight:600;">${avg}</span></td>
       <td><code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:0.8rem;">FUEL-${b.batchId.slice(-6)}</code></td>
       <td>
         <div style="display:flex;gap:6px;">
@@ -1837,12 +1841,19 @@ function recalcFuelRow(idx) {
   const avgEl = row.querySelector('.fuel-average');
   const vehicleEl = row.querySelector('.fuel-vehicle');
   if (avgEl && odometerEl && vehicleEl && litres > 0) {
-    const vehicleId = vehicleEl.value;
+    const vehicleInput = vehicleEl.value;
     const currentOdometer = parseFloat(odometerEl.value) || 0;
-    if (vehicleId && currentOdometer > 0) {
-      // Find the last fuel entry for this vehicle (before current batch)
-      const prevEntries = state.fuel.filter(f => f.vehicle === vehicleId && f.odometer > 0)
-                          .sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (vehicleInput && currentOdometer > 0) {
+      // Resolve current input to an actual vehicle ID
+      const vObj = state.vehicles.find(v => v.id === vehicleInput || `${v.name} (${v.plate})` === vehicleInput);
+      const targetVehicleId = vObj ? vObj.id : vehicleInput;
+
+      // Find the last fuel entry for this vehicle
+      const prevEntries = state.fuel.filter(f => {
+        const fVObj = state.vehicles.find(v => v.id === f.vehicle || `${v.name} (${v.plate})` === f.vehicle);
+        const fVehicleId = fVObj ? fVObj.id : f.vehicle;
+        return fVehicleId === targetVehicleId && f.odometer > 0;
+      }).sort((a, b) => new Date(b.date) - new Date(a.date));
       const prevOdometer = prevEntries.length > 0 ? prevEntries[0].odometer : 0;
       if (prevOdometer > 0 && currentOdometer > prevOdometer) {
         const kmDriven = currentOdometer - prevOdometer;
@@ -2479,9 +2490,9 @@ function openInvoice(id) {
   if (!b) return;
   
   const isMTag = b.type === 'M-Tag';
-  const v = isMTag ? null : state.vehicles.find(x => x.id === b.vehicle);
-  const vName = isMTag ? 'M-Tag Vehicles' : (v ? v.name : 'Unknown');
-  const vPlate = isMTag ? b.vehicle : (v ? v.plate : '-');
+  const v = isMTag ? null : state.vehicles.find(x => x.id === b.vehicle || `${x.name} (${x.plate})` === b.vehicle);
+  const vName = isMTag ? 'M-Tag Vehicles' : (v ? v.name : (b.vehicle || 'Unknown'));
+  const vPlate = isMTag ? b.vehicle : (v ? v.plate : (b.vehicle || '-'));
   
   const drvObj = b.driver ? state.drivers.find(d => d.id === b.driver) : (v ? state.drivers.find(d => d.id === v.driver) : null);
   const dName = drvObj ? drvObj.name : '-';
@@ -2528,8 +2539,8 @@ function openInvoice(id) {
     
     let tbodyHtml = '';
     b.batchDetails.forEach((r) => {
-      const vObj = state.vehicles.find(x => x.id === r.vehicle);
-      const vPlate = vObj ? vObj.plate : '-';
+      const vObj = state.vehicles.find(x => x.id === r.vehicle || `${x.name} (${x.plate})` === r.vehicle);
+      const vPlate = vObj ? vObj.plate : (r.vehicle || '-');
       const rateStr = parseFloat(r.rate || 0).toFixed(2);
       
       tbodyHtml += `<tr style="border-bottom:1px solid #cbd5e1;">
@@ -2977,7 +2988,55 @@ if (typeof LOGO_BASE64 !== 'undefined') {
     img.src = LOGO_BASE64;
   });
 }
+
+function recalculateAllAverages() {
+  let updated = false;
+  // Sort by date ascending to simulate chronological entries
+  const sortedFuel = [...state.fuel].sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  for (let i = 0; i < sortedFuel.length; i++) {
+    const f = sortedFuel[i];
+    if (f.odometer > 0) {
+      // Find actual vehicle ID for the current record
+      const vObj = state.vehicles.find(v => v.id === f.vehicle || `${v.name} (${v.plate})` === f.vehicle);
+      const targetVehicleId = vObj ? vObj.id : f.vehicle;
+      
+      // Find the previous record for this vehicle
+      const prevEntries = sortedFuel.slice(0, i).filter(pf => {
+        const pfVObj = state.vehicles.find(v => v.id === pf.vehicle || `${v.name} (${v.plate})` === pf.vehicle);
+        const pfVehicleId = pfVObj ? pfVObj.id : pf.vehicle;
+        return pfVehicleId === targetVehicleId && pf.odometer > 0;
+      }).sort((a, b) => new Date(b.date) - new Date(a.date));
+      
+      const prevOdometer = prevEntries.length > 0 ? prevEntries[0].odometer : 0;
+      
+      let newAvg = '';
+      if (prevOdometer > 0 && f.odometer > prevOdometer) {
+        const kmDriven = f.odometer - prevOdometer;
+        newAvg = (kmDriven / f.litres).toFixed(2) + ' km/L';
+      } else if (prevOdometer === 0) {
+        newAvg = 'First';
+      } else {
+        newAvg = '—';
+      }
+      
+      // Find original reference and update
+      const orig = state.fuel.find(of => of.id === f.id);
+      if (orig && orig.fuelAverage !== newAvg) {
+        orig.fuelAverage = newAvg;
+        updated = true;
+      }
+    }
+  }
+  
+  if (updated) {
+    saveState();
+    console.log("Fuel averages recalculated for historical records.");
+  }
+}
+
 loadState();
+recalculateAllAverages();
 checkLogin();
 navigate('dashboard');
 renderSidebarDeptVehicles();
