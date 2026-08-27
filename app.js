@@ -37,9 +37,9 @@ function loadState() {
       if (!state.downloadHistory) state.downloadHistory = [];
       if (!state.settings) {
         state.settings = {
-          companyName: 'Vision Food & Packaging',
+          companyName: 'Vision Food & Packaging Lahore',
           companyCity: 'Lahore',
-          companyAddress: 'Plot# 363, 364 & 366 Sunder Industrial Estate, Raiwind'
+          companyAddress: 'Plot No# 363, 364 & 366 Sundar Industrial Estate, Raiwind Road, Lahore'
         };
       }
       if (!state.settings.username) state.settings.username = 'admin';
@@ -223,7 +223,25 @@ function uid() {
 }
 
 // ─── Navigation ───
+function applyUserRole() {
+  const role = sessionStorage.getItem("fms_user_role");
+  const ids = ["nav-dashboard", "nav-vehicles", "nav-bikes", "nav-drivers", "nav-reports", "nav-monthlyreport", "nav-departments", "nav-tokentax", "nav-settings"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (role === "user") { el.style.display = "none"; }
+      else { el.style.display = ""; }
+    }
+  });
+}
+
 function navigate(page) {
+  const role = sessionStorage.getItem("fms_user_role");
+  if (role === "user" && !["fuel", "maintenance", "ledger", "bills", "mtag"].includes(page)) {
+     showToast("Access Denied for regular user", "error");
+     if (!document.querySelector(".page.active")) navigate("fuel");
+     return;
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
@@ -235,7 +253,7 @@ function navigate(page) {
     fuel: 'Fuel Log', reports: 'Reports',
     departments: 'Departments', bills: 'Bill View',
     settings: 'System Settings', tokentax: 'Token & Tax', mtag: 'M-Tag',
-    ledger: 'Accounts / Ledger'
+    ledger: 'Accounts / Ledger', monthlyreport: 'Monthly Report'
   }[page] || page;
   renderPage(page);
   // Close sidebar on mobile
@@ -260,14 +278,339 @@ function renderPage(page) {
   if (page === 'settings')    renderSettings();
   if (page === 'tokentax')    renderTokenTax();
   if (page === 'mtag')        renderMTag();
-  if (page === 'ledger')      renderLedger();
+  if (page === 'ledger')         renderLedger();
+  if (page === 'monthlyreport')  renderMonthlyReportPage();
   renderSidebarDeptVehicles();
+}
+
+// ─── MONTHLY REPORT PAGE ───
+function renderMonthlyReportPage() {
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Build list of available months from fuel + maintenance
+  const monthSet = new Set();
+  (state.fuel || []).forEach(f => { if (f.date) { const d = new Date(f.date); monthSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); } });
+  (state.maintenance || []).forEach(m => { if (m.date) { const d = new Date(m.date); monthSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); } });
+
+  const allMonths = [...monthSet].sort().reverse();
+  const sel = document.getElementById('monthlyReportMonthSelect');
+  if (!sel) return;
+
+  const prev = sel.value;
+  sel.innerHTML = allMonths.map(m => {
+    const [y, mo] = m.split('-');
+    return `<option value="${m}" ${m === prev ? 'selected' : ''}>${MONTH_NAMES[parseInt(mo)-1]} ${y}</option>`;
+  }).join('');
+
+  // Auto-select current month if no previous selection
+  if (!prev || !allMonths.includes(prev)) {
+    const now = new Date();
+    const cur = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    if (allMonths.includes(cur)) sel.value = cur;
+    else if (allMonths.length > 0) sel.value = allMonths[0];
+  }
+
+  const selectedKey = sel.value;
+  if (!selectedKey) {
+    document.getElementById('monthlyReportVehicleBody').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">No data available</td></tr>`;
+    return;
+  }
+
+  const [selYear, selMonth] = selectedKey.split('-').map(Number);
+  const search = (document.getElementById('m-rep-vehicle-search')?.value || '').toLowerCase();
+
+  const [mo, yr] = [selMonth-1, selYear];
+  const titleEl = document.getElementById('m-rep-table-title');
+  if (titleEl) titleEl.textContent = `🚗 Vehicle-wise Expenditure — ${MONTH_NAMES[mo]} ${yr}`;
+
+  // Aggregate fuel per vehicle for selected month
+  const fuelByVehicle = {};
+  (state.fuel || []).forEach(f => {
+    if (!f.date) return;
+    const d = new Date(f.date);
+    if (d.getFullYear() !== yr || d.getMonth() !== mo) return;
+    const vObj = state.vehicles.find(v => v.id === f.vehicle || `${v.name} (${v.plate})` === f.vehicle || v.plate === f.vehicle);
+    const vId = vObj ? vObj.id : (f.vehicle || 'unknown');
+    if (!fuelByVehicle[vId]) fuelByVehicle[vId] = { litres: 0, cost: 0, vObj };
+    fuelByVehicle[vId].litres += Number(f.litres) || 0;
+    fuelByVehicle[vId].cost   += Number(f.cost) || 0;
+    if (!fuelByVehicle[vId].vObj && vObj) fuelByVehicle[vId].vObj = vObj;
+  });
+
+  // Aggregate maintenance per vehicle for selected month
+  const maintByVehicle = {};
+  (state.maintenance || []).forEach(m => {
+    if (!m.date) return;
+    const d = new Date(m.date);
+    if (d.getFullYear() !== yr || d.getMonth() !== mo) return;
+    const vObj = state.vehicles.find(v => v.id === m.vehicle || `${v.name} (${v.plate})` === m.vehicle || v.plate === m.vehicle);
+    const vId = vObj ? vObj.id : (m.vehicle || 'unknown');
+    if (!maintByVehicle[vId]) maintByVehicle[vId] = { cost: 0, vObj };
+    maintByVehicle[vId].cost += Number(m.cost) || 0;
+    if (!maintByVehicle[vId].vObj && vObj) maintByVehicle[vId].vObj = vObj;
+  });
+
+  // Merge all vehicle IDs
+  const allVehicleIds = new Set([...Object.keys(fuelByVehicle), ...Object.keys(maintByVehicle)]);
+
+  let rows = [];
+  allVehicleIds.forEach(vId => {
+    const fuel = fuelByVehicle[vId] || { litres: 0, cost: 0 };
+    const maint = maintByVehicle[vId] || { cost: 0 };
+    const vObj = fuel.vObj || maint.vObj || state.vehicles.find(v => v.id === vId);
+    const plate = vObj ? vObj.plate : vId;
+    const model = vObj ? vObj.name : '—';
+    const driver = vObj ? getDriverName(vObj.driver) : '—';
+
+    // Fuel average from state.fuel for this month for this vehicle
+    const fuelEntries = (state.fuel || []).filter(f => {
+      if (!f.date) return false;
+      const d = new Date(f.date);
+      if (d.getFullYear() !== yr || d.getMonth() !== mo) return false;
+      const fVObj = state.vehicles.find(v => v.id === f.vehicle || `${v.name} (${v.plate})` === f.vehicle);
+      const fVId = fVObj ? fVObj.id : f.vehicle;
+      return fVId === vId;
+    });
+    const avgVals = fuelEntries.filter(f => f.fuelAverage && f.fuelAverage !== 'First' && f.fuelAverage !== '—');
+    let avgDisp = '—';
+    if (avgVals.length > 0) {
+      const nums = avgVals.map(f => parseFloat(f.fuelAverage));
+      const avg = nums.reduce((a,b)=>a+b,0) / nums.length;
+      avgDisp = avg.toFixed(2) + ' km/L';
+    }
+
+    rows.push({ plate, model, driver, fuelLitres: fuel.litres, fuelCost: fuel.cost, maintCost: maint.cost, avgDisp });
+  });
+
+  // Apply search filter
+  if (search) {
+    rows = rows.filter(r => r.plate.toLowerCase().includes(search) || r.model.toLowerCase().includes(search) || r.driver.toLowerCase().includes(search));
+  }
+
+  // Sort by total cost descending
+  rows.sort((a, b) => (b.fuelCost + b.maintCost) - (a.fuelCost + a.maintCost));
+
+  // Summary totals
+  let totLitres = 0, totFuel = 0, totMaint = 0;
+  rows.forEach(r => { totLitres += r.fuelLitres; totFuel += r.fuelCost; totMaint += r.maintCost; });
+
+  // Update stat cards
+  const setEl = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  setEl('m-rep-fuel-litres', totLitres.toFixed(2) + ' L');
+  setEl('m-rep-fuel-cost', fmtPKR(totFuel));
+  setEl('m-rep-maint-cost', fmtPKR(totMaint));
+  setEl('m-rep-total-cost', fmtPKR(totFuel + totMaint));
+
+  const tbody = document.getElementById('monthlyReportVehicleBody');
+  const tfoot = document.getElementById('monthlyReportVehicleFoot');
+  if (!tbody) return;
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">No data found for selected month</td></tr>`;
+    if (tfoot) tfoot.innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const total = r.fuelCost + r.maintCost;
+    const driverDisplay = (r.driver && r.driver !== '—' && !/^[a-z0-9_]{10,}$/i.test(r.driver)) ? r.driver : '—';
+    return `<tr>
+      <td style="text-align:center; font-weight:700;">${i+1}</td>
+      <td>
+        <strong style="font-size:0.92rem; color:#1e3a8a; display:block;">${r.plate}</strong>
+        <div style="font-size:0.8rem; color:#64748b; margin-top:2px;">${r.model}</div>
+      </td>
+      <td><strong>${driverDisplay}</strong></td>
+      <td style="color:#4f46e5; font-weight:700; text-align:right;">${r.fuelLitres > 0 ? r.fuelLitres.toFixed(2) + ' L' : '—'}</td>
+      <td style="color:#2563eb; font-weight:700; text-align:right;">${r.fuelCost > 0 ? fmtPKR(r.fuelCost) : '—'}</td>
+      <td style="color:#ea580c; font-weight:700; text-align:right;">${r.maintCost > 0 ? fmtPKR(r.maintCost) : '—'}</td>
+      <td style="color:#047857; font-weight:800; font-size:1rem; text-align:right; background:rgba(16,185,129,0.1); border-left:1px solid rgba(16,185,129,0.2); border-right:1px solid rgba(16,185,129,0.2);">${fmtPKR(total)}</td>
+      <td class="fuel-avg-col" style="text-align:center;"><span style="background:rgba(16,185,129,0.12); padding:3px 10px; border-radius:20px; font-size:0.8rem; font-weight:700; color:#047857;">${r.avgDisp}</span></td>
+    </tr>`;
+  }).join('');
+
+  if (tfoot) {
+    tfoot.innerHTML = `<tr style="background:#f8fafc; border-top:2px solid #0f172a; border-bottom:2px solid #0f172a;">
+      <td colspan="3" style="padding:12px 10px; text-align:right; font-weight:900; font-size:1.02rem; color:#0f172a;">GRAND TOTAL</td>
+      <td style="padding:12px 10px; color:#4f46e5; font-weight:800; text-align:right;">${totLitres.toFixed(2)} L</td>
+      <td style="padding:12px 10px; color:#2563eb; font-weight:800; text-align:right;">${fmtPKR(totFuel)}</td>
+      <td style="padding:12px 10px; color:#ea580c; font-weight:800; text-align:right;">${fmtPKR(totMaint)}</td>
+      <td style="padding:12px 10px; color:#047857; font-weight:900; font-size:1.15rem; text-align:right; background:#dcfce7; border-left:1px solid #86efac; border-right:1px solid #86efac;">${fmtPKR(totFuel+totMaint)}</td>
+      <td class="fuel-avg-col" style="padding:12px 10px; text-align:center;">—</td>
+    </tr>`;
+  }
+
+  // Also render fuel details tab
+  renderFuelDetailsTab(selectedKey, selYear, selMonth);
+}
+
+// ─── Tab Switcher ───
+function switchMonthlyTab(tab) {
+  const tabSummary    = document.getElementById('tabSummary');
+  const tabFuelDetail = document.getElementById('tabFuelDetail');
+  const btnSummary    = document.getElementById('tabBtnSummary');
+  const btnFuelDetail = document.getElementById('tabBtnFuelDetail');
+
+  if (tab === 'summary') {
+    if (tabSummary)    tabSummary.style.display    = 'block';
+    if (tabFuelDetail) tabFuelDetail.style.display  = 'none';
+    if (btnSummary) {
+      btnSummary.className    = 'btn-primary';
+      btnSummary.style.background    = '#1e3a8a';
+      btnSummary.style.borderColor   = '#1e3a8a';
+    }
+    if (btnFuelDetail) {
+      btnFuelDetail.className = 'btn-secondary';
+      btnFuelDetail.style.background = '';
+      btnFuelDetail.style.borderColor = '';
+    }
+  } else {
+    if (tabSummary)    tabSummary.style.display    = 'none';
+    if (tabFuelDetail) tabFuelDetail.style.display  = 'block';
+    if (btnFuelDetail) {
+      btnFuelDetail.className = 'btn-primary';
+      btnFuelDetail.style.background    = '#1e3a8a';
+      btnFuelDetail.style.borderColor   = '#1e3a8a';
+    }
+    if (btnSummary) {
+      btnSummary.className    = 'btn-secondary';
+      btnSummary.style.background    = '';
+      btnSummary.style.borderColor   = '';
+    }
+  }
+}
+
+// ─── Render Fuel Details Tab ───
+function renderFuelDetailsTab(selectedKey, yr, mo) {
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const container = document.getElementById('fuelDetailsContainer');
+  const label     = document.getElementById('fuelDetailMonthLabel');
+  if (!container) return;
+
+  if (label) label.textContent = `${MONTH_NAMES[mo - 1]} ${yr}`;
+
+  // Gather all fuel entries for this month
+  const monthFuelEntries = (state.fuel || []).filter(f => {
+    if (!f.date) return false;
+    const d = new Date(f.date);
+    return d.getFullYear() === yr && (d.getMonth() + 1) === mo;
+  });
+
+  if (monthFuelEntries.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.95rem;">No fuel entries found for this month.</div>`;
+    return;
+  }
+
+  // Group fuel entries by vehicle
+  const byVehicle = {};
+  monthFuelEntries.forEach(f => {
+    const vObj = state.vehicles.find(v => v.id === f.vehicle || `${v.name} (${v.plate})` === f.vehicle || v.plate === f.vehicle);
+    const vId  = vObj ? vObj.id : (f.vehicle || 'unknown');
+    const plate = vObj ? vObj.plate : (f.vehicle || '—');
+    const model = vObj ? vObj.name  : '—';
+    if (!byVehicle[vId]) byVehicle[vId] = { plate, model, entries: [] };
+    byVehicle[vId].entries.push(f);
+  });
+
+  // Sort each vehicle's entries by date ascending
+  Object.values(byVehicle).forEach(vData => {
+    vData.entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+  });
+
+  // Sort vehicles by plate
+  const sortedVehicles = Object.values(byVehicle).sort((a, b) => a.plate.localeCompare(b.plate));
+
+  let html = '';
+  sortedVehicles.forEach(vData => {
+    const totalLitres = vData.entries.reduce((s, f) => s + (Number(f.litres) || 0), 0);
+    const totalCost   = vData.entries.reduce((s, f) => s + (Number(f.cost)   || 0), 0);
+
+    const rows = vData.entries.map((f, idx) => `
+      <tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+        <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#64748b; font-size:0.85rem;">${idx + 1}</td>
+        <td style="padding:9px 12px; border:1px solid #e2e8f0; font-weight:600; color:#0f172a;">${formatDate(f.date)}</td>
+        <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#4f46e5; font-weight:700; text-align:right;">${Number(f.litres).toFixed(2)} L</td>
+        <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#475569; font-size:0.85rem; text-align:right;">${Number(f.rate || 0).toFixed(2)}</td>
+        <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#2563eb; font-weight:700; text-align:right;">${fmtPKR(f.cost)}</td>
+        <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#475569; font-size:0.85rem;">${f.fuelType || 'Petrol'}</td>
+        <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#047857; font-size:0.83rem;">${(f.pumpName || '—')}</td>
+      </tr>
+    `).join('');
+
+    html += `
+      <div class="fuel-detail-vehicle-block" data-plate="${vData.plate.toLowerCase()} ${vData.model.toLowerCase()}" style="margin-bottom:28px;">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+          <span style="background:#1e3a8a; color:#fff; font-weight:800; font-size:0.85rem; padding:4px 14px; border-radius:20px;">🚗 ${vData.plate}</span>
+          <span style="color:#64748b; font-size:0.85rem; font-weight:600;">${vData.model}</span>
+          <span style="margin-left:auto; background:#dcfce7; color:#047857; font-weight:800; font-size:0.85rem; padding:4px 14px; border-radius:20px;">Total: ${fmtPKR(totalCost)} · ${totalLitres.toFixed(2)} L</span>
+        </div>
+        <div style="overflow-x:auto; border-radius:10px; border:1px solid #e2e8f0; box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+          <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+            <thead>
+              <tr style="background:#f1f5f9;">
+                <th style="padding:9px 12px; text-align:left; border:1px solid #e2e8f0; color:#64748b; font-size:0.8rem; font-weight:700;">#</th>
+                <th style="padding:9px 12px; text-align:left; border:1px solid #e2e8f0; color:#1e3a8a; font-weight:700;">DATE</th>
+                <th style="padding:9px 12px; text-align:right; border:1px solid #e2e8f0; color:#4f46e5; font-weight:700;">LITRES</th>
+                <th style="padding:9px 12px; text-align:right; border:1px solid #e2e8f0; color:#64748b; font-weight:700;">RATE (PKR)</th>
+                <th style="padding:9px 12px; text-align:right; border:1px solid #e2e8f0; color:#2563eb; font-weight:700;">AMOUNT (PKR)</th>
+                <th style="padding:9px 12px; text-align:left; border:1px solid #e2e8f0; color:#64748b; font-weight:700;">FUEL TYPE</th>
+                <th style="padding:9px 12px; text-align:left; border:1px solid #e2e8f0; color:#64748b; font-weight:700;">PUMP STATION</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+            <tfoot>
+              <tr style="background:#e0f2fe; font-weight:800; border-top:2px solid #0f172a;">
+                <td colspan="2" style="padding:10px 12px; border:1px solid #e2e8f0; text-align:right; color:#0f172a; font-size:0.9rem;">TOTAL</td>
+                <td style="padding:10px 12px; border:1px solid #e2e8f0; text-align:right; color:#4f46e5;">${totalLitres.toFixed(2)} L</td>
+                <td style="padding:10px 12px; border:1px solid #e2e8f0;"></td>
+                <td style="padding:10px 12px; border:1px solid #e2e8f0; text-align:right; color:#047857; font-size:1rem;">${fmtPKR(totalCost)}</td>
+                <td colspan="2" style="padding:10px 12px; border:1px solid #e2e8f0;"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+// ─── Filter Fuel Details by Vehicle Search ───
+function filterFuelDetails() {
+  const search = (document.getElementById('fuelDetailSearch')?.value || '').toLowerCase().trim();
+  const blocks = document.querySelectorAll('.fuel-detail-vehicle-block');
+  let visibleCount = 0;
+
+  blocks.forEach(block => {
+    const plateModel = block.getAttribute('data-plate') || '';
+    const match = !search || plateModel.includes(search);
+    block.style.display = match ? 'block' : 'none';
+    if (match) visibleCount++;
+  });
+
+  // Show "no results" message if nothing matches
+  let noResultEl = document.getElementById('fuelDetailNoResult');
+  if (!noResultEl) {
+    noResultEl = document.createElement('div');
+    noResultEl.id = 'fuelDetailNoResult';
+    noResultEl.style.cssText = 'text-align:center; padding:30px; color:var(--text-muted); font-size:0.95rem; font-weight:600;';
+    noResultEl.textContent = '❌ Koi vehicle nahi mila. Dobara search karein.';
+    document.getElementById('fuelDetailsContainer')?.after(noResultEl);
+  }
+  noResultEl.style.display = (visibleCount === 0 && search) ? 'block' : 'none';
 }
 
 // ─── Helpers ───
 function getDriverName(id) {
-  const d = state.drivers.find(x => x.id === id);
-  return d ? d.name : (id || '—');
+  if (!id || id === '-' || id === '—' || id === 'null' || id === 'undefined') return '—';
+  const d = (state.drivers || []).find(x => x.id === id || x.name === id || (x.name && x.name.toLowerCase().trim() === String(id).toLowerCase().trim()));
+  if (d && d.name) return d.name;
+  if (/^[a-z0-9_]{10,}$/i.test(String(id).trim())) return '—';
+  return String(id).trim() || '—';
 }
 function getVehicleName(id) {
   const v = state.vehicles.find(x => x.id === id);
@@ -295,6 +638,27 @@ function generateNextBillNo() {
   });
   const nextNum = maxNum + 1;
   return `VFP-A-${String(nextNum).padStart(2, '0')}`;
+}
+
+function resequenceAllBills() {
+  if (!state.bills || !state.bills.length) return;
+  
+  // Sort bills chronologically by date ascending
+  state.bills.sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  let needsSave = false;
+  state.bills.forEach((b, i) => {
+    const seq = String(i + 1).padStart(2, '0');
+    const newBillNo = `VFP-A-${seq}`;
+    if (b.billNo !== newBillNo) {
+      b.billNo = newBillNo;
+      needsSave = true;
+    }
+  });
+  
+  if (needsSave) {
+    saveState();
+  }
 }
 
 function renderTokenTax() {
@@ -329,9 +693,13 @@ function renderTokenTax() {
         <td><span class="status-badge ${v.tokenStatus === 'Paid' ? 'active' : 'inactive'}" style="padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">${v.tokenStatus || 'Unpaid'}</span></td>
         <td>${v.tokenStartDate || '-'}</td>
         <td>${v.tokenExpiryDate || '-'}</td>
+        <td style="text-align:center;">
+          <button class="btn-icon-sm" onclick="editTokenTax('${v.id}')" title="Edit Token & Tax">✏️</button>
+          <button class="btn-icon-sm" onclick="deleteTokenTax('${v.id}')" title="Delete" style="color:#ef4444;">🗑️</button>
+        </td>
       </tr>
     `;
-  }).join('') : `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-muted);">No Token Tax records found</td></tr>`;
+  }).join('') : `<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text-muted);">No Token Tax records found</td></tr>`;
 }
 function fmtPKR(n) { return 'PKR ' + Number(n).toLocaleString('en-PK'); }
 
@@ -800,6 +1168,16 @@ function renderMonthlyReportTable() {
 }
 
 function printReport() {
+  document.body.classList.remove('printing-invoice');
+  window.print();
+}
+
+function printMonthlyReport() {
+  document.body.classList.remove('printing-invoice');
+  const sel = document.getElementById('monthlyReportMonthSelect');
+  const txt = sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'Monthly Summary';
+  const printMonthEl = document.getElementById('m-rep-print-month-title');
+  if (printMonthEl) printMonthEl.textContent = txt;
   window.print();
 }
 
@@ -1094,12 +1472,77 @@ function drawTypeChart() {
 }
 
 // ─── MODALS ───
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('open');
+  if (id === 'invoiceModal') document.body.classList.add('invoice-open');
+}
 
-function openTokenTaxModal() {
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+  if (id === 'invoiceModal') {
+    document.body.classList.remove('invoice-open');
+    document.body.classList.remove('printing-invoice');
+  }
+}
+
+// Global Print Listeners: Auto-detect if Invoice Modal is open or normal page is printing
+window.addEventListener('beforeprint', () => {
+  const inv = document.getElementById('invoiceModal');
+  if (inv && inv.classList.contains('open')) {
+    document.body.classList.add('printing-invoice');
+    document.body.classList.add('invoice-open');
+  } else {
+    document.body.classList.remove('printing-invoice');
+    document.body.classList.remove('invoice-open');
+  }
+});
+
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('printing-invoice');
+});
+
+function openTokenTaxModal(id) {
   document.getElementById('tokenTaxForm').reset();
+  const editIdEl = document.getElementById('ttEditId');
+  if (editIdEl) editIdEl.value = '';
+  
+  const titleEl = document.getElementById('tokenTaxModalTitle');
+  const submitBtn = document.getElementById('ttSubmitBtn');
+
+  if (id) {
+    const v = state.vehicles.find(x => x.id === id);
+    if (v) {
+      if (titleEl) titleEl.textContent = 'Edit Vehicle (Token Tax)';
+      if (submitBtn) submitBtn.textContent = 'Update Vehicle';
+      if (editIdEl) editIdEl.value = v.id;
+      document.getElementById('ttPlate').value = v.plate || '';
+      if (document.getElementById('ttModelName')) document.getElementById('ttModelName').value = (v.name && v.name !== 'Token Tax Record') ? v.name : '';
+      if (document.getElementById('ttType')) document.getElementById('ttType').value = (v.type && v.type !== 'N/A') ? v.type : '';
+      document.getElementById('ttAssignName').value = v.designation || '';
+      document.getElementById('ttStatus').value = v.tokenStatus || 'Paid';
+      document.getElementById('ttStartDate').value = v.tokenStartDate || '';
+      document.getElementById('ttExpiryDate').value = v.tokenExpiryDate || '';
+    }
+  } else {
+    if (titleEl) titleEl.textContent = 'Add Vehicle (Token Tax)';
+    if (submitBtn) submitBtn.textContent = 'Save Vehicle';
+  }
   openModal('tokenTaxModal');
+}
+
+function editTokenTax(id) {
+  openTokenTaxModal(id);
+}
+
+function deleteTokenTax(id) {
+  if (!confirm('Are you sure you want to delete this Token & Tax record?')) return;
+  state.vehicles = state.vehicles.filter(x => x.id !== id);
+  saveState();
+  renderTokenTax();
+  updateDashStats();
+  showToast('Token Tax record deleted.', 'success');
 }
 
 function populateVehicleDriverSelect(selectedId) {
@@ -1160,26 +1603,53 @@ function openEditVehicle(id) {
 }
 document.getElementById('tokenTaxForm').addEventListener('submit', e => {
   e.preventDefault();
-  const v = {
-    id: uid(),
-    plate: document.getElementById('ttPlate').value.trim(),
-    name: 'Token Tax Record',
-    type: 'N/A',
-    power: '1001 CC', // to bypass the > 1000cc filter in renderTokenTax
-    designation: document.getElementById('ttAssignName').value.trim(),
-    tokenStatus: document.getElementById('ttStatus').value,
-    tokenStartDate: document.getElementById('ttStartDate').value,
-    tokenExpiryDate: document.getElementById('ttExpiryDate').value,
-    status: 'Active',
-    year: new Date().getFullYear(),
-    driver: '',
-    color: 'N/A', chassis: 'N/A', engine: 'N/A', insurance: 'N/A', etag: false, envTag: false, dept: 'general'
-  };
-  state.vehicles.push(v);
+  const editId = document.getElementById('ttEditId')?.value;
+  const plate = document.getElementById('ttPlate').value.trim();
+  const modelName = document.getElementById('ttModelName')?.value.trim();
+  const type = document.getElementById('ttType')?.value.trim();
+  const assignName = document.getElementById('ttAssignName').value.trim();
+  const status = document.getElementById('ttStatus').value;
+  const startDate = document.getElementById('ttStartDate').value;
+  const expiryDate = document.getElementById('ttExpiryDate').value;
+
+  if (editId) {
+    const v = state.vehicles.find(x => x.id === editId);
+    if (v) {
+      v.plate = plate;
+      if (modelName) v.name = modelName;
+      if (type) v.type = type;
+      v.designation = assignName;
+      v.tokenStatus = status;
+      v.tokenStartDate = startDate;
+      v.tokenExpiryDate = expiryDate;
+      if (!v.power || parseInt((v.power || '').toString().replace(/[^0-9]/g, '')) <= 1000) {
+        v.power = '1001 CC';
+      }
+    }
+    showToast('Token Tax record updated! 🚗', 'success');
+  } else {
+    const v = {
+      id: uid(),
+      plate: plate,
+      name: modelName || 'Token Tax Record',
+      type: type || 'Car',
+      power: '1001 CC', // to bypass the > 1000cc filter in renderTokenTax
+      designation: assignName,
+      tokenStatus: status,
+      tokenStartDate: startDate,
+      tokenExpiryDate: expiryDate,
+      status: 'Active',
+      year: new Date().getFullYear(),
+      driver: '',
+      color: 'N/A', chassis: 'N/A', engine: 'N/A', insurance: 'N/A', etag: false, envTag: false, dept: 'general'
+    };
+    state.vehicles.push(v);
+    showToast('Token Tax Vehicle added! 🚗', 'success');
+  }
   saveState();
   renderTokenTax();
+  updateDashStats();
   closeModal('tokenTaxModal');
-  showToast('Token Tax Vehicle added!', 'success');
 });
 
 // ─── M-TAG ───────────────────────────────────────────────────────────────────
@@ -1218,7 +1688,6 @@ function renderMTag() {
       <td>${r.model || '—'}</td>
       <td>${r.assign || '—'}</td>
       <td><code style="background:var(--card);padding:2px 8px;border-radius:6px;">${r.accountNo || '—'}</code></td>
-      <td><strong>PKR ${Number(r.toll || 0).toLocaleString()}</strong></td>
       <td><strong style="color:#22c55e;">PKR ${Number(r.topup || 0).toLocaleString()}</strong></td>
       <td>${r.billDate || '—'}</td>
       <td>
@@ -1234,7 +1703,7 @@ function renderMTag() {
 (function updateMTagTableHeaders() {
   const thead = document.querySelector('#mtagTable thead tr');
   if (thead) {
-    thead.innerHTML = `<th>SR</th><th>Vehicle Type</th><th>Reg No</th><th>Model / Make</th><th>Driver / Assign</th><th>M-Tag Account No</th><th>Toll (PKR)</th><th>Top-up (PKR)</th><th>Date</th><th>Actions</th>`;
+    thead.innerHTML = `<th>SR</th><th>Vehicle Type</th><th>Reg No</th><th>Model / Make</th><th>Details</th><th>M-Tag Account No</th><th>Top-up (PKR)</th><th>Date</th><th>Actions</th>`;
   }
 })();
 
@@ -1254,9 +1723,8 @@ function addMTagVehicleRow(data) {
     </select></td>
     <td><input type="text" name="mtagRowPlate_${idx}" style="width:100px;padding:4px;" value="${data?.plate||''}" placeholder="Plate No" /></td>
     <td><input type="text" name="mtagRowModel_${idx}" style="width:100px;padding:4px;" value="${data?.model||''}" placeholder="Model" /></td>
-    <td><input type="text" name="mtagRowAssign_${idx}" style="width:100px;padding:4px;" value="${data?.assign||''}" placeholder="Driver" /></td>
+    <td><input type="text" name="mtagRowAssign_${idx}" style="width:100px;padding:4px;" value="${data?.assign||''}" placeholder="Details" /></td>
     <td><input type="text" name="mtagRowAccNo_${idx}" style="width:100px;padding:4px;" value="${data?.accountNo||''}" placeholder="Acc No" /></td>
-    <td><input type="number" name="mtagRowToll_${idx}" style="width:80px;padding:4px;" value="${data?.toll||''}" placeholder="0" min="0" oninput="updateMTagTotals()" /></td>
     <td><input type="number" name="mtagRowTopup_${idx}" style="width:80px;padding:4px;" value="${data?.topup||''}" placeholder="0" min="0" oninput="updateMTagTotals()" /></td>
     <td style="text-align:center;"><button type="button" onclick="removeMTagRow(${idx})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;">✕</button></td>
   `;
@@ -1430,15 +1898,73 @@ document.getElementById('mtagForm').addEventListener('submit', e => {
 
 function renderLedger() {
   if (!state.ledger) state.ledger = [];
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  const curMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  // Populate month selector dropdown if not already populated or on data update
+  const monthSel = document.getElementById('ledgerMonthSelect');
+  if (monthSel) {
+    const monthSet = new Set();
+    monthSet.add(curMonthKey);
+    (state.ledger || []).forEach(e => {
+      if (e.date) {
+        const d = new Date(e.date);
+        if (!isNaN(d.getTime())) {
+          monthSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+        }
+      }
+    });
+    const allMonths = [...monthSet].sort().reverse();
+    const prevVal = monthSel.value;
+
+    let optionsHtml = '';
+    const curYear = now.getFullYear();
+    const curMonthName = MONTH_NAMES[now.getMonth()];
+    optionsHtml += `<option value="${curMonthKey}">📅 Current Month (${curMonthName} ${curYear})</option>`;
+    optionsHtml += `<option value="all">📂 All Months (Full History)</option>`;
+
+    allMonths.forEach(m => {
+      if (m !== curMonthKey) {
+        const [y, mo] = m.split('-');
+        const mName = MONTH_NAMES[parseInt(mo, 10) - 1];
+        optionsHtml += `<option value="${m}">📁 ${mName} ${y}</option>`;
+      }
+    });
+
+    monthSel.innerHTML = optionsHtml;
+    if (prevVal && (prevVal === 'all' || allMonths.includes(prevVal))) {
+      monthSel.value = prevVal;
+    } else {
+      monthSel.value = curMonthKey; // Default: clean current month view
+    }
+  }
+
+  const selectedMonth = monthSel ? monthSel.value : curMonthKey;
   const search = (document.getElementById('ledgerSearch')?.value || '').toLowerCase();
   const typeFilter = document.getElementById('ledgerTypeFilter')?.value || '';
   const tbody = document.getElementById('ledgerBody');
   if (!tbody) return;
 
-  let entries = state.ledger;
+  // Calculate All-Time totals
+  let allTimeIn = 0;
+  let allTimeOut = 0;
+  (state.ledger || []).forEach(e => {
+    if (e.type === 'Received') allTimeIn += Number(e.amount) || 0;
+    if (e.type === 'Returned') allTimeOut += Number(e.amount) || 0;
+  });
+  const allTimeBalance = allTimeIn - allTimeOut;
+
+  // Filter entries by selected month
+  let entries = [...state.ledger];
+  if (selectedMonth && selectedMonth !== 'all') {
+    entries = entries.filter(e => e.date && e.date.startsWith(selectedMonth));
+  }
+
   if (typeFilter) entries = entries.filter(e => e.type === typeFilter);
   if (search) entries = entries.filter(e =>
-    (e.desc || '').toLowerCase().includes(search)
+    (e.desc || '').toLowerCase().includes(search) ||
+    (e.date || '').toLowerCase().includes(search)
   );
 
   // Sort by date descending
@@ -1446,31 +1972,87 @@ function renderLedger() {
 
   let totalIn = 0;
   let totalOut = 0;
+  let totalPending = 0;
+
+  const isCurrentMonth = selectedMonth === curMonthKey;
+  const isAll = selectedMonth === 'all';
+  let periodName = 'This Month';
+  if (isAll) periodName = 'All Time';
+  else if (!isCurrentMonth) {
+    const [y, mo] = selectedMonth.split('-');
+    periodName = `${MONTH_NAMES[parseInt(mo,10)-1]} ${y}`;
+  }
+
+  const emptyMsg = isCurrentMonth
+    ? `No transactions recorded for ${curMonthName} ${curYear} yet. Current month is fresh & clean! 🌿`
+    : `No transactions found for ${periodName}.`;
 
   tbody.innerHTML = entries.length ? entries.map((e, i) => {
     if (e.type === 'Received') totalIn += Number(e.amount) || 0;
     if (e.type === 'Returned') totalOut += Number(e.amount) || 0;
-    
+    const pending = Number(e.pendingAmt) || 0;
+    if (pending > 0) totalPending += pending;
+
     const typeColor = e.type === 'Received' ? '#22c55e' : '#f59e0b';
     const typeLabel = e.type === 'Received' ? '📥 In' : '📤 Out';
+    const rowBg = pending > 0 ? 'background:rgba(239,68,68,0.07);border-left:4px solid #ef4444;' : '';
+    const pendingBadge = pending > 0
+      ? `<span style="background:#fef3c7;color:#b45309;border:1px solid #f59e0b;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:700;margin-left:6px;">⚠️ Pending: PKR ${pending.toLocaleString()}</span>`
+      : '';
+    const totalBillNote = Number(e.totalBill) > 0
+      ? `<div style="font-size:0.78rem;color:#64748b;margin-top:2px;">Total Bill: PKR ${Number(e.totalBill).toLocaleString()}</div>`
+      : '';
 
-    return `<tr>
+    return `<tr style="${rowBg}">
       <td>${i + 1}</td>
       <td><span style="background:${typeColor};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.82rem;">${typeLabel}</span></td>
       <td>${e.date || '—'}</td>
-      <td><strong>PKR ${Number(e.amount||0).toLocaleString()}</strong></td>
-      <td>${e.desc || '—'}</td>
+      <td>
+        <strong style="font-size:1rem;">PKR ${Number(e.amount||0).toLocaleString()}</strong>
+        ${totalBillNote}
+      </td>
+      <td>
+        ${e.desc || '—'}
+        ${pendingBadge}
+      </td>
       <td>
         <button class="btn-icon-sm" onclick="editLedgerEntry('${e.id}')" title="Edit">✏️</button>
         <button class="btn-icon-sm" onclick="deleteLedgerEntry('${e.id}')" title="Delete" style="color:#ef4444;">🗑️</button>
       </td>
     </tr>`;
-  }).join('') : `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);">No transactions found.</td></tr>`;
+  }).join('') : `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);font-weight:600;">${emptyMsg}</td></tr>`;
 
-  // Update cards
+  // Update card labels
+  const labelIn = document.getElementById('ledger-label-in');
+  if (labelIn) labelIn.textContent = `${periodName} Received (In)`;
+  const labelOut = document.getElementById('ledger-label-out');
+  if (labelOut) labelOut.textContent = `${periodName} Returned (Out)`;
+  const labelBalance = document.getElementById('ledger-label-balance');
+  if (labelBalance) labelBalance.textContent = `${periodName} Balance`;
+
+  // Update card values
   if (document.getElementById('ledger-total-in')) document.getElementById('ledger-total-in').textContent = 'PKR ' + totalIn.toLocaleString();
   if (document.getElementById('ledger-total-out')) document.getElementById('ledger-total-out').textContent = 'PKR ' + totalOut.toLocaleString();
-  if (document.getElementById('ledger-balance')) document.getElementById('ledger-balance').textContent = 'PKR ' + (totalIn - totalOut).toLocaleString();
+  if (document.getElementById('ledger-balance')) {
+    const net = totalIn - totalOut;
+    document.getElementById('ledger-balance').textContent = (net < 0 ? '- PKR ' + Math.abs(net).toLocaleString() : 'PKR ' + net.toLocaleString());
+  }
+  if (document.getElementById('ledger-total-balance')) {
+    document.getElementById('ledger-total-balance').textContent = (allTimeBalance < 0 ? '- PKR ' + Math.abs(allTimeBalance).toLocaleString() : 'PKR ' + allTimeBalance.toLocaleString());
+  }
+}
+
+function calcLedgerPending() {
+  const amt = Number(document.getElementById('ledgerAmount')?.value) || 0;
+  const total = Number(document.getElementById('ledgerTotalBill')?.value) || 0;
+  const pendingEl = document.getElementById('ledgerPendingAmt');
+  if (!pendingEl) return;
+  if (total > 0 && amt >= 0) {
+    const p = total - amt;
+    pendingEl.value = p > 0 ? p : 0;
+  } else {
+    pendingEl.value = '';
+  }
 }
 
 function openLedgerModal(id) {
@@ -1479,7 +2061,7 @@ function openLedgerModal(id) {
   document.getElementById('ledgerEditId').value = '';
   document.getElementById('ledgerModalTitle').textContent = 'Add Transaction';
   document.getElementById('ledgerDate').value = new Date().toISOString().split('T')[0];
-  
+
   if (id) {
     const entry = state.ledger.find(e => e.id === id);
     if (entry) {
@@ -1489,6 +2071,8 @@ function openLedgerModal(id) {
       document.getElementById('ledgerDate').value = entry.date || '';
       document.getElementById('ledgerAmount').value = entry.amount || '';
       document.getElementById('ledgerDesc').value = entry.desc || '';
+      if (document.getElementById('ledgerTotalBill')) document.getElementById('ledgerTotalBill').value = entry.totalBill || '';
+      if (document.getElementById('ledgerPendingAmt')) document.getElementById('ledgerPendingAmt').value = entry.pendingAmt || '';
     }
   }
   openModal('ledgerModal');
@@ -1511,12 +2095,17 @@ document.getElementById('ledgerForm').addEventListener('submit', e => {
   e.preventDefault();
   if (!state.ledger) state.ledger = [];
   const editId = document.getElementById('ledgerEditId').value;
+  const amt = Number(document.getElementById('ledgerAmount').value) || 0;
+  const totalBill = Number(document.getElementById('ledgerTotalBill')?.value) || 0;
+  const pendingAmt = totalBill > 0 ? Math.max(0, totalBill - amt) : 0;
   const entry = {
-    id:     editId || uid(),
-    type:   document.getElementById('ledgerType').value,
-    date:   document.getElementById('ledgerDate').value,
-    amount: document.getElementById('ledgerAmount').value,
-    desc:   document.getElementById('ledgerDesc').value.trim(),
+    id:         editId || uid(),
+    type:       document.getElementById('ledgerType').value,
+    date:       document.getElementById('ledgerDate').value,
+    amount:     amt,
+    desc:       document.getElementById('ledgerDesc').value.trim(),
+    totalBill:  totalBill,
+    pendingAmt: pendingAmt,
   };
 
   if (editId) {
@@ -2390,7 +2979,9 @@ document.getElementById('billForm')?.addEventListener('submit', e => {
     status: document.getElementById('billStatus').value,
     notes: document.getElementById('billNotes').value.trim(),
     currentReading: document.getElementById('billCurrentReading').value,
-    nextReading: document.getElementById('billNextReading').value
+    nextReading: document.getElementById('billNextReading').value,
+    paidAmount: Number(document.getElementById('billPaidAmount')?.value) || 0,
+    pendingAmount: Number(document.getElementById('billPendingAmount')?.value) || 0
   };
   if (editingId.bill) {
     state.bills = state.bills.map(b => b.id === editingId.bill ? rec : b);
@@ -2416,6 +3007,7 @@ function renderBills() {
   const statusF = document.getElementById('billStatusFilter').value;
   const vehF = document.getElementById('billVehicleFilter').value;
   const search = document.getElementById('billSearch').value.toLowerCase();
+  const sortOrder = document.getElementById('billSortOrder')?.value || 'desc';
 
   let list = state.bills.filter(b => {
     return (!typeF || b.type === typeF) &&
@@ -2424,7 +3016,14 @@ function renderBills() {
            (!search || b.billNo.toLowerCase().includes(search) || b.vendor.toLowerCase().includes(search));
   });
 
-  list.sort((a,b) => new Date(b.date) - new Date(a.date));
+  list.sort((a, b) => {
+    const numA = parseInt(String(a.billNo).replace(/[^0-9]/g, ''), 10) || 0;
+    const numB = parseInt(String(b.billNo).replace(/[^0-9]/g, ''), 10) || 0;
+    if (numA !== numB) {
+      return sortOrder === 'asc' ? numA - numB : numB - numA;
+    }
+    return sortOrder === 'asc' ? new Date(a.date) - new Date(b.date) : new Date(b.date) - new Date(a.date);
+  });
 
   let totalAmount = 0;
   let paidCount = 0;
@@ -2482,7 +3081,66 @@ function openEditBill(id) {
   document.getElementById('billNotes').value = b.notes || '';
   document.getElementById('billCurrentReading').value = b.currentReading || '';
   document.getElementById('billNextReading').value = b.nextReading || '';
+  if(document.getElementById('billPaidAmount')) { document.getElementById('billPaidAmount').value = b.paidAmount || ''; delete document.getElementById('billPaidAmount').dataset.manual; }
+  if(document.getElementById('billPendingAmount')) document.getElementById('billPendingAmount').value = b.pendingAmount || '';
   openModal('billModal');
+}
+
+function resolveDriverDetails(driverInput, vehicleObj, billObj) {
+  let rawDriver = driverInput;
+  
+  // 1. Try from maintenance record if referenceId exists
+  if (!rawDriver && billObj && billObj.referenceId && state.maintenance) {
+    const mRec = state.maintenance.find(m => m.id === billObj.referenceId);
+    if (mRec && mRec.driver) rawDriver = mRec.driver;
+  }
+  
+  // 2. Try from fuel batch if batchDetails exists
+  if (!rawDriver && billObj && billObj.batchDetails && billObj.batchDetails.length > 0) {
+    const fRow = billObj.batchDetails.find(r => r.driver);
+    if (fRow) rawDriver = fRow.driver;
+  }
+  
+  // 3. Try from vehicle's assigned driver
+  if (!rawDriver && vehicleObj) {
+    rawDriver = vehicleObj.driver;
+  }
+  
+  // 4. Try from active vehicle allotment
+  if (!rawDriver && vehicleObj && state.allotments) {
+    const activeAllot = state.allotments.find(a => 
+      (a.vehicle === vehicleObj.id || a.vehicle === vehicleObj.plate || `${vehicleObj.name} (${vehicleObj.plate})` === a.vehicle) 
+      && a.status === 'Active'
+    );
+    if (activeAllot && activeAllot.driver) {
+      rawDriver = activeAllot.driver;
+    }
+  }
+
+  if (!rawDriver) {
+    return { name: '-', phone: '-' };
+  }
+
+  const searchStr = String(rawDriver).trim();
+
+  // Search state.drivers for matching driver object (by ID or by Name)
+  const dObj = state.drivers.find(d => 
+    d.id === searchStr || 
+    d.name.trim().toLowerCase() === searchStr.toLowerCase()
+  );
+
+  if (dObj) {
+    return {
+      name: dObj.name || searchStr,
+      phone: (dObj.phone && dObj.phone !== '-') ? dObj.phone : '-'
+    };
+  }
+
+  // Fallback: If searchStr is driver name or free text
+  return {
+    name: searchStr || '-',
+    phone: '-'
+  };
 }
 
 function openInvoice(id) {
@@ -2490,19 +3148,19 @@ function openInvoice(id) {
   if (!b) return;
   
   const isMTag = b.type === 'M-Tag';
-  const v = isMTag ? null : state.vehicles.find(x => x.id === b.vehicle || `${x.name} (${x.plate})` === b.vehicle);
+  const v = isMTag ? null : state.vehicles.find(x => x.id === b.vehicle || `${x.name} (${x.plate})` === b.vehicle || x.plate === b.vehicle);
   const vName = isMTag ? 'M-Tag Vehicles' : (v ? v.name : (b.vehicle || 'Unknown'));
   const vPlate = isMTag ? b.vehicle : (v ? v.plate : (b.vehicle || '-'));
   
-  const drvObj = b.driver ? state.drivers.find(d => d.id === b.driver) : (v ? state.drivers.find(d => d.id === v.driver) : null);
-  const dName = drvObj ? drvObj.name : '-';
-  const drvPhone = drvObj ? (drvObj.phone || '-') : '-';
+  const drvInfo = resolveDriverDetails(b.driver, v, b);
+  const dName = drvInfo.name;
+  const drvPhone = drvInfo.phone;
   
   // Find allotment
   const deptAllot = state.allotments.find(a => a.vehicle === b.vehicle && a.status === 'Active');
   const vDept = v ? (v.dept || (deptAllot ? deptAllot.department : '-')) : '-';
   
-  const companyName = (state.settings && state.settings.companyName) || 'Vision Food & Packaging';
+  const companyName = (state.settings && state.settings.companyName) || 'Vision Food & Packaging Lahore';
 
   if (b.fuelBatch && b.batchDetails && b.batchDetails.length > 0) {
     document.getElementById('invoiceSheet').style.display = 'none';
@@ -2555,6 +3213,10 @@ function openInvoice(id) {
     
     document.getElementById('fuelInvoiceBodySimple').innerHTML = tbodyHtml;
     document.getElementById('fuelInvoiceGrandTotalSimple').textContent = fmtPKR(b.amount);
+    const paidAmt2 = Number(b.paidAmount) || 0;
+    const pendingAmt2 = Number(b.pendingAmount) || (Number(b.amount) - paidAmt2);
+    if(document.getElementById('fuelInvoicePaidField')) document.getElementById('fuelInvoicePaidField').textContent = fmtPKR(paidAmt2);
+    if(document.getElementById('fuelInvoicePendingField')) document.getElementById('fuelInvoicePendingField').textContent = fmtPKR(pendingAmt2 > 0 ? pendingAmt2 : 0);
     
     // Status Stamp for Fuel Invoice (Disabled)
     const stampFuel = document.getElementById('invStampFuelSimple');
@@ -2585,15 +3247,17 @@ function openInvoice(id) {
           <td style="padding:10px; border:1px solid #cbd5e1; font-weight:700; color:#1e3a8a;">${vRow.plate}</td>
           <td style="padding:10px; border:1px solid #cbd5e1; color:#0f172a;">${getDriverName(vRow.assign) || vRow.assign || '-'}</td>
           <td style="padding:10px; border:1px solid #cbd5e1; color:#0f172a;">${vRow.accountNo || '-'}</td>
-          <td style="padding:10px; border:1px solid #cbd5e1; text-align:right; color:#0f172a;">${Number(vRow.toll).toLocaleString()}</td>
           <td style="padding:10px; border:1px solid #cbd5e1; text-align:right; color:#22c55e;">${Number(vRow.topup).toLocaleString()}</td>
         </tr>`;
       });
     }
 
     document.getElementById('mtagInvoiceBody').innerHTML = tbodyHtml;
-    document.getElementById('mtagInvoiceTotalToll').textContent = totToll.toLocaleString();
     document.getElementById('mtagInvoiceTotalTopup').textContent = totTopup.toLocaleString();
+    const paidAmt3 = Number(b.paidAmount) || 0;
+    const pendingAmt3 = Number(b.pendingAmount) || (totTopup - paidAmt3);
+    if(document.getElementById('mtagInvoicePaidField')) document.getElementById('mtagInvoicePaidField').textContent = fmtPKR(paidAmt3);
+    if(document.getElementById('mtagInvoicePendingField')) document.getElementById('mtagInvoicePendingField').textContent = fmtPKR(pendingAmt3 > 0 ? pendingAmt3 : 0);
 
   } else {
     document.getElementById('fuelInvoiceSheet').style.display = 'none';
@@ -2619,6 +3283,10 @@ function openInvoice(id) {
     document.getElementById('invDetailsField').textContent = b.notes || '-';
     document.getElementById('invAmountField').textContent = fmtPKR(b.amount);
     document.getElementById('invTotalField').textContent = fmtPKR(b.amount);
+    const paidAmt1 = Number(b.paidAmount) || 0;
+    const pendingAmt1 = Number(b.pendingAmount) || (Number(b.amount) - paidAmt1);
+    if(document.getElementById('invPaidField')) document.getElementById('invPaidField').textContent = fmtPKR(paidAmt1);
+    if(document.getElementById('invPendingField')) document.getElementById('invPendingField').textContent = fmtPKR(pendingAmt1 > 0 ? pendingAmt1 : 0);
 
     // Status Stamp for Standard Invoice (Disabled)
     const stamp = document.getElementById('invStampSimple');
@@ -2631,7 +3299,9 @@ function openInvoice(id) {
 }
 
 function printInvoiceSheet() {
+  document.body.classList.add('printing-invoice');
   window.print();
+  setTimeout(() => document.body.classList.remove('printing-invoice'), 1200);
 }
 
 // Track which bill is currently open in the invoice modal
@@ -2678,9 +3348,9 @@ function markInvoicePaid() {
 function applyBranding() {
   if (!state.settings) {
     state.settings = {
-      companyName: 'Vision Food & Packaging',
+      companyName: 'Vision Food & Packaging Lahore',
       companyCity: 'Lahore',
-      companyAddress: 'Plot# 363, 364 & 366 Sunder Industrial Estate, Raiwind',
+      companyAddress: 'Plot No# 363, 364 & 366 Sundar Industrial Estate, Raiwind Road, Lahore',
       username: 'admin',
       password: 'admin123'
     };
@@ -2756,51 +3426,54 @@ document.getElementById('settingsFirebaseForm')?.addEventListener('submit', e =>
   initFirebaseSync(config);
 });
 
+function startFirebaseSync(config) {
+  try {
+    if (typeof firebase === 'undefined') return;
+    if (!firebase.apps.length) {
+      firebase.initializeApp(config);
+    }
+    const db = firebase.database();
+    const stateRef = db.ref('fleet_state');
+
+    stateRef.on('value', (snapshot) => {
+      const remoteState = snapshot.val();
+      if (remoteState && remoteState.vehicles) {
+        if (JSON.stringify(state) !== JSON.stringify(remoteState)) {
+          state = remoteState;
+          localStorage.setItem('vehiclehub_v5', JSON.stringify(state));
+          updateDashStats();
+          updateDatalists();
+          const activePage = document.querySelector('.page.active')?.id.replace('page-', '') || 'dashboard';
+          renderPage(activePage);
+          renderSidebarDeptVehicles();
+        }
+      }
+    });
+
+    window.firebaseInitialized = true;
+    window.firebaseDbRef = stateRef;
+    console.log('Firebase Realtime Cloud Sync Active 🌐');
+  } catch (err) {
+    console.error('Firebase sync initialization error:', err);
+  }
+}
+
 function initFirebaseSync(config) {
   if (window.firebaseInitialized) return;
   if (!config.apiKey || !config.databaseURL || !config.projectId) return;
 
-  showToast('Connecting to Cloud Sync...', 'info');
+  if (typeof firebase !== 'undefined') {
+    startFirebaseSync(config);
+  } else {
+    const s1 = document.createElement('script');
+    s1.src = 'https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js';
+    const s2 = document.createElement('script');
+    s2.src = 'https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js';
 
-  const s1 = document.createElement('script');
-  s1.src = 'https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js';
-  const s2 = document.createElement('script');
-  s2.src = 'https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js';
-
-  s1.onload = () => {
-    document.head.appendChild(s2);
-  };
-
-  s2.onload = () => {
-    try {
-      firebase.initializeApp(config);
-      const db = firebase.database();
-      const stateRef = db.ref('fleet_state');
-
-      stateRef.on('value', (snapshot) => {
-        const remoteState = snapshot.val();
-        if (remoteState) {
-          if (JSON.stringify(state) !== JSON.stringify(remoteState)) {
-            state = remoteState;
-            localStorage.setItem('vehiclehub_v5', JSON.stringify(state));
-            updateDashStats();
-            const activePage = document.querySelector('.page.active')?.id.replace('page-', '') || 'dashboard';
-            renderPage(activePage);
-            showToast('Portal synced automatically! 🔄', 'success');
-          }
-        }
-      });
-
-      window.firebaseInitialized = true;
-      window.firebaseDbRef = stateRef;
-      showToast('Cloud Sync Connected successfully! 🌐', 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('Firebase connection failed: ' + err.message, 'error');
-    }
-  };
-
-  document.head.appendChild(s1);
+    s1.onload = () => { document.head.appendChild(s2); };
+    s2.onload = () => { startFirebaseSync(config); };
+    document.head.appendChild(s1);
+  }
 }
 
 function disableFirebaseSync() {
@@ -2856,32 +3529,119 @@ function exportAppData() {
 
 function exportToExcel() {
   try {
+    const c = (val) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const emptyCols = (count) => Array(count).fill('""').join(',');
+
     let csvRows = [];
-    csvRows.push("=== VEHICLES LIST ===");
-    csvRows.push("Plate No,Model Name,Type,Engine CC,Designation,Status,Token Status,Token Start Date,Token Expiry Date");
-    (state.vehicles || []).forEach(v => {
-      csvRows.push(`"${v.plate || ''}","${v.name || ''}","${v.type || ''}","${v.power || ''}","${v.designation || ''}","${v.status || ''}","${v.tokenStatus || ''}","${v.tokenStartDate || ''}","${v.tokenExpiryDate || ''}"`);
+
+    // Header Title
+    csvRows.push(`${c("VISION FOOD & PACKAGING - FLEET MANAGEMENT SYSTEM BACKUP EXPORT")},${emptyCols(11)}`);
+    csvRows.push(`${c("Export Date: " + new Date().toLocaleString())},${emptyCols(11)}`);
+    csvRows.push(emptyCols(12));
+
+    // 1. VEHICLES LIST (12 columns)
+    csvRows.push(`${c("=== 1. VEHICLES LIST ===")},${emptyCols(11)}`);
+    csvRows.push([
+      c("SR#"), c("Plate No"), c("Vehicle / Model Name"), c("Type"), c("Engine / Power"),
+      c("Department"), c("Assigned Driver"), c("Status"), c("Token Status"),
+      c("Token Start Date"), c("Token Expiry Date"), c("Tags")
+    ].join(','));
+    (state.vehicles || []).forEach((v, i) => {
+      csvRows.push([
+        c(i + 1), c(v.plate), c(v.name), c(v.type), c(v.power),
+        c(v.dept || '-'), c(getDriverName(v.driver)), c(v.status), c(v.tokenStatus || '-'),
+        c(v.tokenStartDate || '-'), c(v.tokenExpiryDate || '-'),
+        c((v.etag ? 'E-Tag ' : '') + (v.envTag ? 'Env-Tag' : ''))
+      ].join(','));
+    });
+    csvRows.push(emptyCols(12));
+
+    // 2. DRIVERS LIST (12 columns)
+    csvRows.push(`${c("=== 2. DRIVERS LIST ===")},${emptyCols(11)}`);
+    csvRows.push([
+      c("SR#"), c("Driver Name"), c("Contact Phone"), c("License No"), c("License Expiry"),
+      c("Address / Details"), c(""), c(""), c(""), c(""), c(""), c("")
+    ].join(','));
+    (state.drivers || []).forEach((d, i) => {
+      csvRows.push([
+        c(i + 1), c(d.name), c(d.phone), c(d.license), c(d.licenseExpiry),
+        c(d.address || '-'), c(""), c(""), c(""), c(""), c(""), c("")
+      ].join(','));
+    });
+    csvRows.push(emptyCols(12));
+
+    // 3. FUEL LOGS (12 columns)
+    csvRows.push(`${c("=== 3. FUEL LOGS ===")},${emptyCols(11)}`);
+    csvRows.push([
+      c("SR#"), c("Date"), c("Voucher ID"), c("Vehicle"), c("Driver"),
+      c("Fuel Type"), c("Litres"), c("Rate / Litre (PKR)"), c("Total Amount (PKR)"),
+      c("Odometer Reading (km)"), c("Fuel Average"), c("Pump Station")
+    ].join(','));
+    (state.fuel || []).forEach((f, i) => {
+      csvRows.push([
+        c(i + 1), c(formatDate(f.date)), c('FUEL-' + (f.batchId ? f.batchId.slice(-6) : (f.id ? f.id.slice(-6) : ''))),
+        c(getVehicleName(f.vehicle)), c(getDriverName(f.driver)), c(f.fuelType || 'PETROL'),
+        c(f.litres), c(f.rate), c(f.cost), c(f.odometer || '-'),
+        c(f.fuelAverage || '-'), c(f.pumpName || '-')
+      ].join(','));
+    });
+    csvRows.push(emptyCols(12));
+
+    // 4. MAINTENANCE LOGS (12 columns)
+    csvRows.push(`${c("=== 4. MAINTENANCE LOGS ===")},${emptyCols(11)}`);
+    csvRows.push([
+      c("SR#"), c("Date"), c("Vehicle"), c("Driver"), c("Maintenance Type"),
+      c("Vendor / Workshop"), c("Vendor Address"), c("Cost Amount (PKR)"), c("Status"),
+      c("Current Odometer"), c("Next Service Due"), c("Notes / Details")
+    ].join(','));
+    (state.maintenance || []).forEach((m, i) => {
+      csvRows.push([
+        c(i + 1), c(formatDate(m.date)), c(getVehicleName(m.vehicle)), c(getDriverName(m.driver)),
+        c(m.type), c(m.vendor || '-'), c(m.vendorAddress || '-'), c(m.cost),
+        c(m.status), c(m.currentReading || '-'), c(m.nextReading || '-'), c(m.notes || '-')
+      ].join(','));
+    });
+    csvRows.push(emptyCols(12));
+
+    // 5. M-TAG LOGS (12 columns)
+    csvRows.push(`${c("=== 5. M-TAG TOLL & TOP-UP LOGS ===")},${emptyCols(11)}`);
+    csvRows.push([
+      c("SR#"), c("Date"), c("Voucher No"), c("Vendor"), c("Vehicles Count"),
+      c("Total Toll (PKR)"), c("Total Topup (PKR)"), c("Total Amount (PKR)"), c("Notes"),
+      c(""), c(""), c("")
+    ].join(','));
+    (state.mtag || []).forEach((mt, i) => {
+      const totToll = Number(mt.totalToll) || 0;
+      const totTopup = Number(mt.totalTopup) || 0;
+      csvRows.push([
+        c(i + 1), c(formatDate(mt.date)), c(mt.voucherNo || '-'), c(mt.vendor || 'NHA / Motorway'),
+        c(mt.vehicles ? mt.vehicles.length : 0), c(totToll), c(totTopup), c(totToll + totTopup),
+        c(mt.notes || '-'), c(""), c(""), c("")
+      ].join(','));
+    });
+    csvRows.push(emptyCols(12));
+
+    // 6. ALL BILLS & INVOICES (12 columns)
+    csvRows.push(`${c("=== 6. ALL BILLS & INVOICES SUMMARY ===")},${emptyCols(11)}`);
+    csvRows.push([
+      c("SR#"), c("Voucher / Invoice No"), c("Date"), c("Bill Type"), c("Vehicle"),
+      c("Driver"), c("Vendor"), c("Amount (PKR)"), c("Status"),
+      c("Notes"), c(""), c("")
+    ].join(','));
+    (state.bills || []).forEach((b, i) => {
+      csvRows.push([
+        c(i + 1), c(b.billNo || '-'), c(formatDate(b.date)), c(b.type),
+        c(getVehicleName(b.vehicle)), c(getDriverName(b.driver)), c(b.vendor || '-'),
+        c(b.amount), c(b.status), c(b.notes || '-'), c(""), c("")
+      ].join(','));
     });
 
-    csvRows.push("\n=== DRIVERS LIST ===");
-    csvRows.push("Name,Phone,License No,License Expiry,Department/Designation");
-    (state.drivers || []).forEach(d => {
-      csvRows.push(`"${d.name || ''}","${d.phone || ''}","${d.license || ''}","${d.licenseExpiry || ''}","${d.address || ''}"`);
-    });
-
-    csvRows.push("\n=== FUEL LOGS ===");
-    csvRows.push("Date,Litres,Rate/L,Total Cost (PKR),Odometer,Pump Name");
-    (state.fuel || []).forEach(f => {
-      csvRows.push(`"${f.date || ''}","${f.litres || 0}","${f.rate || 0}","${f.cost || 0}","${f.odometer || 0}","${f.pump || ''}"`);
-    });
-
-    csvRows.push("\n=== MAINTENANCE LOGS ===");
-    csvRows.push("Date,Workshop Name,Parts Cost,Labor Cost,Total Cost (PKR),Status");
-    (state.maintenance || []).forEach(m => {
-      csvRows.push(`"${m.date || ''}","${m.workshop || ''}","${m.partsCost || 0}","${m.laborCost || 0}","${m.totalCost || 0}","${m.status || ''}"`);
-    });
-
-    const csvString = "\uFEFF" + csvRows.join("\n");
+    const csvString = "\uFEFF" + csvRows.join("\r\n");
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -2892,6 +3652,7 @@ function exportToExcel() {
     link.remove();
     showToast('Excel CSV Backup downloaded successfully! 📊', 'success');
   } catch(e) {
+    console.error(e);
     showToast('Error exporting to Excel ❌', 'error');
   }
 }
@@ -2952,6 +3713,7 @@ function checkLogin() {
   if (sessionStorage.getItem('fms_logged_in') === 'true') {
     const screen = document.getElementById('loginScreen');
     if (screen) screen.style.display = 'none';
+    if (typeof applyUserRole === 'function') applyUserRole();
   }
 }
 
@@ -2960,24 +3722,36 @@ document.getElementById('loginForm')?.addEventListener('submit', e => {
   const user = document.getElementById('loginUsername').value.trim();
   const pass = document.getElementById('loginPassword').value.trim();
 
-  // Always allow hardcoded defaults as fallback
   const correctUser = (state.settings && state.settings.username) ? state.settings.username : 'admin';
   const correctPass = (state.settings && state.settings.password) ? state.settings.password : 'admin123';
 
-  // Also allow universal hardcoded fallback in case Firebase hasn't loaded yet
   const hardUser = 'admin';
   const hardPass = 'admin123';
 
+  const regUser = 'user';
+  const regPass = 'user123';
+
   if ((user === correctUser && pass === correctPass) || (user === hardUser && pass === hardPass)) {
     sessionStorage.setItem('fms_logged_in', 'true');
+    sessionStorage.setItem('fms_user_role', 'admin');
     const screen = document.getElementById('loginScreen');
     if (screen) screen.style.display = 'none';
-    showToast('Login successful! Welcome back 🔓', 'success');
+    showToast('Login successful! Welcome Admin', 'success');
+    if (typeof applyUserRole === 'function') applyUserRole();
+    navigate('dashboard');
+  } else if (user === regUser && pass === regPass) {
+    sessionStorage.setItem('fms_logged_in', 'true');
+    sessionStorage.setItem('fms_user_role', 'user');
+    const screen = document.getElementById('loginScreen');
+    if (screen) screen.style.display = 'none';
+    showToast('Login successful! Welcome User', 'success');
+    if (typeof applyUserRole === 'function') applyUserRole();
+    navigate('fuel');
   } else {
     const errorEl = document.getElementById('loginError');
     if (errorEl) {
+      errorEl.textContent = 'Invalid credentials. Try again.';
       errorEl.style.display = 'block';
-      errorEl.textContent = '❌ Wrong username or password!';
     }
   }
 });
@@ -3037,7 +3811,52 @@ function recalculateAllAverages() {
 
 loadState();
 recalculateAllAverages();
+resequenceAllBills();
 checkLogin();
 navigate('dashboard');
 renderSidebarDeptVehicles();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function calculateBillPending() {
+  const amount = Number(document.getElementById('billAmount')?.value) || 0;
+  const status = document.getElementById('billStatus')?.value;
+  const paidInput = document.getElementById('billPaidAmount');
+  const pendingInput = document.getElementById('billPendingAmount');
+  
+  if (!paidInput || !pendingInput) return;
+  
+  // If status is Paid and user hasn't explicitly typed a different amount, auto-fill it
+  if (status === 'Paid') {
+    if (!paidInput.dataset.manual) {
+      paidInput.value = amount;
+    }
+  } else if (status === 'Pending' && !paidInput.dataset.manual) {
+    paidInput.value = 0;
+  }
+  
+  const paid = Number(paidInput.value) || 0;
+  let pending = amount - paid;
+  if (pending < 0) pending = 0;
+  
+  pendingInput.value = pending;
+}
+
+document.getElementById('billPaidAmount')?.addEventListener('input', function() {
+  this.dataset.manual = 'true';
+  calculateBillPending();
+});
+
+
 
