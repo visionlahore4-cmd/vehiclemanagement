@@ -17,6 +17,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <!-- Firebase Realtime Cloud Sync SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
@@ -86,6 +89,10 @@
       <span class="nav-icon">📈</span>
       <span class="nav-label">Reports</span>
     </a>
+    <a href="#" class="nav-item" data-page="monthlyreport" id="nav-monthlyreport">
+      <span class="nav-icon">📅</span>
+      <span class="nav-label">Monthly Report</span>
+    </a>
     <a href="#" class="nav-item" data-page="tokentax" id="nav-tokentax">
       <span class="nav-icon">🎟️</span>
       <span class="nav-label">Token &amp; Tax</span>
@@ -111,7 +118,7 @@
     <div class="user-avatar">A</div>
     <div class="user-info">
       <span class="user-name">Admin</span>
-      <span class="user-role">Fleet Manager</span>
+      <span class="user-role">Admin Manager</span>
     </div>
   </div>
 </aside>
@@ -404,7 +411,8 @@
               <th>Litres</th>
               <th>Rate/L</th>
               <th>Total (PKR)</th>
-              <th>Odometer (km)</th>
+              <th>Average</th>
+              <th>Batch ID</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -460,6 +468,10 @@
         </select>
         <select id="billVehicleFilter" class="filter-select" onchange="renderBills()">
           <option value="">All Vehicles</option>
+        </select>
+        <select id="billSortOrder" class="filter-select" onchange="renderBills()">
+          <option value="desc">Serial: Newest First (VFP-A-10 → VFP-A-01)</option>
+          <option value="asc">Serial: Oldest First (VFP-A-01 → VFP-A-10)</option>
         </select>
         <input type="text" id="billSearch" class="filter-input" placeholder="Search by Bill No, Vendor..." oninput="renderBills()" />
       </div>
@@ -536,6 +548,7 @@
               <th>Token Status</th>
               <th>Start Date</th>
               <th>Expiry Date</th>
+              <th style="text-align:center;">Actions</th>
             </tr>
           </thead>
           <tbody id="tokentaxBody"></tbody>
@@ -570,9 +583,9 @@
               <th>Vehicle Type</th>
               <th>Reg No</th>
               <th>Model / Make</th>
-              <th>Driver / Assign</th>
+              <th>Details</th>
               <th>M-Tag Account No</th>
-              <th>Toll (PKR)</th>
+              
               <th>Top-up (PKR)</th>
               <th>Date</th>
               <th>Actions</th>
@@ -602,32 +615,42 @@
           <div class="stat-icon">📥</div>
           <div class="stat-info">
             <span class="stat-value" id="ledger-total-in">PKR 0</span>
-            <span class="stat-label">Total Received (In)</span>
+            <span class="stat-label" id="ledger-label-in">Received (In)</span>
           </div>
         </div>
         <div class="stat-card card-orange">
           <div class="stat-icon">📤</div>
           <div class="stat-info">
             <span class="stat-value" id="ledger-total-out">PKR 0</span>
-            <span class="stat-label">Total Returned / Paid (Out)</span>
+            <span class="stat-label" id="ledger-label-out">Returned / Paid (Out)</span>
           </div>
         </div>
         <div class="stat-card card-blue">
           <div class="stat-icon">💰</div>
           <div class="stat-info">
             <span class="stat-value" id="ledger-balance">PKR 0</span>
-            <span class="stat-label">Current Balance</span>
+            <span class="stat-label" id="ledger-label-balance">Month Balance</span>
+          </div>
+        </div>
+        <div class="stat-card card-purple">
+          <div class="stat-icon">🏛️</div>
+          <div class="stat-info">
+            <span class="stat-value" id="ledger-total-balance">PKR 0</span>
+            <span class="stat-label">Overall Total Balance</span>
           </div>
         </div>
       </div>
 
       <div class="filter-bar">
-        <input type="text" id="ledgerSearch" class="filter-input" placeholder="Search transactions..." oninput="renderLedger()" />
+        <select id="ledgerMonthSelect" class="filter-select" style="min-width:210px; font-weight:700; color:var(--primary); background:var(--card);" onchange="renderLedger()">
+          <!-- Populated dynamically: Current Month (Default), All Months, Previous Months -->
+        </select>
         <select id="ledgerTypeFilter" class="filter-select" onchange="renderLedger()">
           <option value="">All Types</option>
           <option value="Received">Received (In)</option>
           <option value="Returned">Returned (Out)</option>
         </select>
+        <input type="text" id="ledgerSearch" class="filter-input" placeholder="Search transactions..." oninput="renderLedger()" />
       </div>
 
       <div class="table-container">
@@ -723,6 +746,147 @@
         <div class="chart-card wide">
           <h3>Vehicle Type Distribution</h3>
           <canvas id="typeChart" width="700" height="280"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── MONTHLY REPORT PAGE ─── -->
+    <section class="page" id="page-monthlyreport">
+      <!-- Print Only Header -->
+      <div class="monthly-report-print-header">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <img src="logo.jpg" alt="Logo" style="width:50px; height:50px; border-radius:8px; object-fit:cover;" />
+          <div>
+            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:#1e3a8a;">Vision Food &amp; Packaging Lahore</h2>
+            <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Management Department</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <h3 style="margin:0; font-size:1.05rem; font-weight:800; color:#1e3a8a;">MONTHLY EXPENDITURE REPORT</h3>
+          <div style="font-size:0.95rem; font-weight:700; color:#0f172a; margin-top:2px;" id="m-rep-print-month-title">Monthly Summary</div>
+          <div style="font-size:0.75rem; color:#64748b; margin-top:2px;">Fuel &amp; Maintenance Breakdown</div>
+        </div>
+      </div>
+
+      <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div>
+          <h1 style="margin:0;">📅 Monthly Fuel &amp; Maintenance Report</h1>
+          <p style="margin:4px 0 0 0; color:var(--text-muted); font-size:0.9rem;">Month-wise expenditure overview &amp; per-vehicle expense breakdown</p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="monthlyReportMonthSelect" class="filter-select" style="min-width:200px; font-weight:700; background:var(--card); color:var(--primary);" onchange="renderMonthlyReportPage()">
+            <!-- Populated dynamically e.g. August 2026 -->
+          </select>
+          <button type="button" class="btn-primary" onclick="printMonthlyReport()" style="background:#10b981; border-color:#10b981;">🖨 Print Report</button>
+        </div>
+      </div>
+
+      <!-- Stat Cards for Selected Month -->
+      <div class="stats-grid" style="margin-bottom:24px;">
+        <div class="stat-card card-purple">
+          <div class="stat-icon">⛽</div>
+          <div class="stat-info">
+            <span class="stat-value" id="m-rep-fuel-litres">0.00 L</span>
+            <span class="stat-label">Monthly Fuel (Litres)</span>
+          </div>
+        </div>
+        <div class="stat-card card-blue">
+          <div class="stat-icon">💳</div>
+          <div class="stat-info">
+            <span class="stat-value" id="m-rep-fuel-cost">PKR 0</span>
+            <span class="stat-label">Monthly Fuel Cost</span>
+          </div>
+        </div>
+        <div class="stat-card card-orange">
+          <div class="stat-icon">🔧</div>
+          <div class="stat-info">
+            <span class="stat-value" id="m-rep-maint-cost">PKR 0</span>
+            <span class="stat-label">Monthly Maintenance Cost</span>
+          </div>
+        </div>
+        <div class="stat-card card-green">
+          <div class="stat-icon">💰</div>
+          <div class="stat-info">
+            <span class="stat-value" id="m-rep-total-cost">PKR 0</span>
+            <span class="stat-label">Total Monthly Expense</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Buttons -->
+      <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+        <button id="tabBtnSummary" onclick="switchMonthlyTab('summary')" class="btn-primary" style="font-size:0.9rem; padding:8px 20px; background:#1e3a8a; border-color:#1e3a8a;">🚗 Vehicle Summary</button>
+        <button id="tabBtnFuelDetail" onclick="switchMonthlyTab('fueldetail')" class="btn-secondary" style="font-size:0.9rem; padding:8px 20px;">⛽ Vehicle Fuel Details</button>
+      </div>
+
+      <!-- TAB 1: Vehicle-wise Summary Table -->
+      <div id="tabSummary">
+        <div class="section-card" style="background:var(--card); padding:24px; border-radius:16px; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid var(--border); margin-bottom:24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+            <h3 style="margin:0; font-size:1.2rem; font-weight:700; color:var(--text);" id="m-rep-table-title">🚗 Vehicle-wise Monthly Expenditure</h3>
+            <input type="text" id="m-rep-vehicle-search" class="filter-input" placeholder="Search vehicle or driver..." style="width:240px;" oninput="renderMonthlyReportPage()" />
+          </div>
+          <div class="table-wrap" style="overflow-x:auto;">
+            <table class="data-table" style="width:100%;">
+              <thead>
+                <tr>
+                  <th style="width:40px; text-align:center;">#</th>
+                  <th>Vehicle Reg &amp; Model</th>
+                  <th>Assigned Driver</th>
+                  <th style="text-align:right;">Fuel (Litres)</th>
+                  <th style="text-align:right;">Fuel Cost (PKR)</th>
+                  <th style="text-align:right;">Maint Cost (PKR)</th>
+                  <th style="text-align:right; background:rgba(16,185,129,0.12); color:#047857; font-weight:800;">TOTAL COST (PKR)</th>
+                  <th class="fuel-avg-col" style="text-align:center;">Fuel Avg (km/L)</th>
+                </tr>
+              </thead>
+              <tbody id="monthlyReportVehicleBody">
+                <!-- Populated by JS -->
+              </tbody>
+              <tfoot id="monthlyReportVehicleFoot" style="font-weight:800; background:var(--bg2);">
+                <!-- Total summary row -->
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Per-Vehicle Fuel Details -->
+      <div id="tabFuelDetail" style="display:none;">
+        <div class="section-card" style="background:var(--card); padding:24px; border-radius:16px; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid var(--border); margin-bottom:24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+            <h3 style="margin:0; font-size:1.2rem; font-weight:700; color:#1e3a8a;">⛽ Per-Vehicle Fuel Details</h3>
+            <span style="font-size:0.85rem; color:var(--text-muted); font-weight:600;" id="fuelDetailMonthLabel"></span>
+          </div>
+          <!-- Search Bar -->
+          <div style="margin-bottom:18px;">
+            <input type="text" id="fuelDetailSearch"
+              placeholder="🔍 Vehicle number search karen... (e.g. LEA-6860)"
+              style="width:100%; max-width:380px; padding:10px 16px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:0.9rem; font-weight:600; color:#0f172a; background:var(--bg2); outline:none; box-sizing:border-box;"
+              oninput="filterFuelDetails()" />
+          </div>
+          <div id="fuelDetailsContainer">
+            <!-- Populated by JS: one mini-table per vehicle -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Print Only Footer & Signatures -->
+      <div class="monthly-report-print-footer">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:35px; text-align:center; padding:0 30px;">
+          <div style="width:200px;">
+            <div style="border-top:2px solid #0f172a; padding-top:8px;">
+              <strong style="font-size:0.95rem; color:#0f172a;">Admin Officer</strong>
+            </div>
+          </div>
+          <div style="width:200px;">
+            <div style="border-top:2px solid #0f172a; padding-top:8px;">
+              <strong style="font-size:0.95rem; color:#0f172a;">Admin Manager</strong>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center; margin-top:20px; border-top:1px solid #cbd5e1; padding-top:10px; font-size:0.8rem; color:#64748b; font-weight:600;">
+          Plot No# 363, 364 &amp; 366 Sundar Industrial Estate, Raiwind Road, Lahore
         </div>
       </div>
     </section>
@@ -1411,9 +1575,9 @@
                 <th style="padding:8px;text-align:left;">Type</th>
                 <th style="padding:8px;text-align:left;">Reg No</th>
                 <th style="padding:8px;text-align:left;">Model / Make</th>
-                <th style="padding:8px;text-align:left;">Driver / Assign</th>
+                <th style="padding:8px;text-align:left;">Details</th>
                 <th style="padding:8px;text-align:left;">M-Tag Acc No</th>
-                <th style="padding:8px;text-align:left;">Toll (PKR)</th>
+                
                 <th style="padding:8px;text-align:left;">Top-up (PKR)</th>
                 <th style="padding:8px;text-align:center;">✕</th>
               </tr>
@@ -1422,7 +1586,7 @@
           </table>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-top:10px;gap:20px;">
-          <span style="font-size:0.9rem;color:var(--text-muted);">Total Toll: <strong id="mtagTotalToll" style="color:var(--accent);">PKR 0</strong></span>
+          
           <span style="font-size:0.9rem;color:var(--text-muted);">Total Top-up: <strong id="mtagTotalTopup" style="color:#22c55e;">PKR 0</strong></span>
           <span style="font-size:0.9rem;color:var(--text-muted);">Grand Total: <strong id="mtagGrandTotal" style="color:#f59e0b;">PKR 0</strong></span>
         </div>
@@ -1460,11 +1624,21 @@
       <div class="form-row">
         <div class="form-group">
           <label>Amount (PKR) *</label>
-          <input type="number" id="ledgerAmount" required placeholder="e.g. 5000" min="0" />
+          <input type="number" id="ledgerAmount" required placeholder="e.g. 188000" min="0" oninput="calcLedgerPending()" />
         </div>
         <div class="form-group">
           <label>Description / Reference</label>
-          <input type="text" id="ledgerDesc" placeholder="e.g. Returned M-Tag bill #123" required />
+          <input type="text" id="ledgerDesc" placeholder="e.g. Partial payment for bill" required />
+        </div>
+      </div>
+      <div class="form-row" style="background:#fef9ec;border:1px solid #f59e0b;border-radius:10px;padding:12px;margin-top:4px;">
+        <div class="form-group">
+          <label>Total Bill Amount (PKR) (agar partial payment hai)</label>
+          <input type="number" id="ledgerTotalBill" placeholder="e.g. 246000" min="0" oninput="calcLedgerPending()" />
+        </div>
+        <div class="form-group">
+          <label>Pending Amount (PKR) - auto calculated</label>
+          <input type="number" id="ledgerPendingAmt" placeholder="Auto = Total - Amount" readonly style="background:#fef3c7;font-weight:800;color:#b45309;cursor:not-allowed;border:2px solid #f59e0b;font-size:1.05rem;" />
         </div>
       </div>
       <div class="modal-actions">
@@ -1475,7 +1649,7 @@
   </div>
 </div>
 
-<!-- Token Tax Add Vehicle Modal -->
+<!-- Token Tax Add/Edit Vehicle Modal -->
 <div class="modal-overlay" id="tokenTaxModal">
   <div class="modal">
     <div class="modal-header">
@@ -1483,32 +1657,47 @@
       <button class="modal-close" onclick="closeModal('tokenTaxModal')">✕</button>
     </div>
     <form id="tokenTaxForm" class="modal-form">
-      <div class="form-group">
-        <label>Vehicle No (Plate)</label>
-        <input type="text" id="ttPlate" required placeholder="e.g. ABC-123" />
+      <input type="hidden" id="ttEditId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label>Vehicle Reg No (Plate) *</label>
+          <input type="text" id="ttPlate" required placeholder="e.g. ABC-123" />
+        </div>
+        <div class="form-group">
+          <label>Model Name</label>
+          <input type="text" id="ttModelName" placeholder="e.g. Toyota Corolla" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Make &amp; Type</label>
+          <input type="text" id="ttType" placeholder="e.g. Car / Van / Truck" />
+        </div>
+        <div class="form-group">
+          <label>Assign Name / Dept</label>
+          <input type="text" id="ttAssignName" placeholder="e.g. Sales Dept / Admin" />
+        </div>
       </div>
       <div class="form-group">
-        <label>Assign Name</label>
-        <input type="text" id="ttAssignName" required placeholder="e.g. Sales Dept" />
-      </div>
-      <div class="form-group">
-        <label>Token Status</label>
+        <label>Token Status *</label>
         <select id="ttStatus" required>
           <option value="Paid">Paid</option>
           <option value="Unpaid">Unpaid</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>Start Date</label>
-        <input type="date" id="ttStartDate" required />
-      </div>
-      <div class="form-group">
-        <label>Expiry Date</label>
-        <input type="date" id="ttExpiryDate" required />
+      <div class="form-row">
+        <div class="form-group">
+          <label>Start Date</label>
+          <input type="date" id="ttStartDate" />
+        </div>
+        <div class="form-group">
+          <label>Expiry Date</label>
+          <input type="date" id="ttExpiryDate" />
+        </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" onclick="closeModal('tokenTaxModal')">Cancel</button>
-        <button type="submit" class="btn-primary">Save Vehicle</button>
+        <button type="submit" class="btn-primary" id="ttSubmitBtn">Save Vehicle</button>
       </div>
     </form>
   </div>
@@ -1627,11 +1816,11 @@
       <div class="form-row">
         <div class="form-group">
           <label>Amount (PKR) *</label>
-          <input type="number" id="billAmount" placeholder="e.g. 15000" min="0" required />
+          <input type="number" id="billAmount" placeholder="e.g. 15000" min="0" required oninput="calculateBillPending()" />
         </div>
         <div class="form-group">
           <label>Status</label>
-          <select id="billStatus">
+          <select id="billStatus" onchange="calculateBillPending()">
             <option value="Pending">Pending</option>
             <option value="Paid">Paid</option>
           </select>
@@ -1639,15 +1828,13 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Current Reading (km)</label>
-          <input type="number" id="billCurrentReading" placeholder="e.g. 45000" min="0" />
+          <label>Paid Amount (PKR)</label>
+          <input type="number" id="billPaidAmount" placeholder="e.g. 5000" min="0" oninput="calculateBillPending()" />
         </div>
         <div class="form-group">
-          <label>Next Reading (km)</label>
-          <input type="number" id="billNextReading" placeholder="e.g. 50000" min="0" />
+          <label>Pending Amount (PKR)</label>
+          <input type="number" id="billPendingAmount" placeholder="Auto calculated" readonly style="background:#f1f5f9; cursor:not-allowed;" />
         </div>
-      </div>
-      <div class="form-group">
         <label>Notes</label>
         <textarea id="billNotes" placeholder="Additional details..." rows="2"></textarea>
       </div>
@@ -1668,7 +1855,7 @@
     </div>
     
     <!-- Printable Invoice Sheet -->
-    <div id="invoiceSheet" style="display:none; padding:40px; font-family:'Outfit', sans-serif; background:#fff; color:#0f172a; min-height:297mm; box-sizing:border-box; flex-direction:column; justify-content:space-between;">
+    <div id="invoiceSheet" style="display:none; padding:40px; font-family:'Outfit', sans-serif; background:#fff; color:#0f172a; min-height:250mm; box-sizing:border-box; flex-direction:column; justify-content:space-between;">
       <div>
         <!-- Top Row: Logo & Company (Left) vs Vendor (Right) -->
         <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f172a; padding-bottom:20px; margin-bottom:20px;">
@@ -1678,12 +1865,12 @@
             <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
               <img src="logo.jpg" alt="Logo" class="logo-img" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;" />
               <div>
-                <h2 style="margin:0; font-size:1.4rem; font-weight:800; color:#1e3a8a;" id="invCompanyNameSimple">Vision Food &amp; Packaging</h2>
-                <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Fleet Management Department</span>
+                <h2 style="margin:0; font-size:1.4rem; font-weight:800; color:#1e3a8a;" id="invCompanyNameSimple">Vision Food &amp; Packaging Lahore</h2>
+                <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Management Department</span>
               </div>
             </div>
             <div style="font-size:0.9rem; color:#334155; line-height:1.6;">
-              <div><strong>Company Name:</strong> <span id="invCompanyNameField">Vision Food &amp; Packaging</span></div>
+              <div><strong>Company Name:</strong> <span id="invCompanyNameField">Vision Food &amp; Packaging Lahore</span></div>
               <div><strong>Vehicle No:</strong> <span id="invVehPlateField">-</span></div>
               <div><strong>Driver Name:</strong> <span id="invDriverNameField">-</span></div>
               <div><strong>Contact No:</strong> <span id="invDriverPhoneField">-</span></div>
@@ -1730,7 +1917,7 @@
             <!-- Total Row inside table -->
             <tr style="background:#f8fafc; font-weight:800;">
               <td colspan="3" style="padding:12px; text-align:right; border:1px solid #cbd5e1;">TOTAL AMOUNT</td>
-              <td style="padding:12px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;" id="invTotalField">PKR 0</td>
+              <td style="padding:12px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a; font-size:1.1rem; font-weight:900;" id="invTotalField">PKR 0</td>
             </tr>
           </tbody>
         </table>
@@ -1744,7 +1931,7 @@
       <!-- Signatures & Footer -->
       <div>
         <!-- Signatures -->
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:50px; text-align:center; padding:0 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:30px; text-align:center; padding:0 20px;">
           <div style="width:200px;">
             <div style="border-top:2px solid #0f172a; padding-top:8px;">
               <strong style="font-size:0.95rem; color:#0f172a;">Admin Officer</strong>
@@ -1758,14 +1945,14 @@
         </div>
 
         <!-- Bottom Footer line -->
-        <div style="text-align:center; margin-top:40px; border-top:1px solid #e2e8f0; padding-top:15px; font-size:0.8rem; color:#64748b;">
-          Vision Food &amp; Packaging • Sunder Industrial Estate, Raiwind, Lahore
+        <div style="text-align:center; margin-top:20px; border-top:1px solid #e2e8f0; padding-top:10px; font-size:0.85rem; color:#475569; font-weight:600;">
+          Plot No# 363, 364 &amp; 366 Sundar Industrial Estate, Raiwind Road, Lahore
         </div>
       </div>
     </div>
     
     <!-- Fuel Printable Invoice Sheet (Excel Layout) -->
-    <div id="fuelInvoiceSheet" style="display:none; padding:40px; font-family:'Outfit', sans-serif; background:#fff; color:#0f172a; min-height:297mm; box-sizing:border-box; flex-direction:column; justify-content:space-between;">
+    <div id="fuelInvoiceSheet" style="display:none; padding:40px; font-family:'Outfit', sans-serif; background:#fff; color:#0f172a; min-height:250mm; box-sizing:border-box; flex-direction:column; justify-content:space-between;">
       <div>
         <!-- Top Row: Logo & Company (Left) vs Vendor (Right) -->
         <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f172a; padding-bottom:20px; margin-bottom:20px;">
@@ -1775,12 +1962,12 @@
             <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
               <img src="logo.jpg" alt="Logo" class="logo-img" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;" />
               <div>
-                <h2 style="margin:0; font-size:1.4rem; font-weight:800; color:#1e3a8a;">Vision Food &amp; Packaging</h2>
-                <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Fleet Management Department</span>
+                <h2 style="margin:0; font-size:1.4rem; font-weight:800; color:#1e3a8a;">Vision Food &amp; Packaging Lahore</h2>
+                <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Management Department</span>
               </div>
             </div>
             <div style="font-size:0.9rem; color:#334155; line-height:1.6;">
-              <div><strong>Company Name:</strong> <span>Vision Food &amp; Packaging</span></div>
+              <div><strong>Company Name:</strong> <span>Vision Food &amp; Packaging Lahore</span></div>
               <div><strong>Report Type:</strong> <span>Fuel Expenses Voucher</span></div>
             </div>
           </div>
@@ -1810,9 +1997,9 @@
             <!-- Populated by JS -->
           </tbody>
           <tfoot>
-            <tr style="background:#f8fafc; font-weight:800; font-size:1rem;">
+            <tr style="background:#f8fafc; font-weight:800; font-size:0.95rem;">
               <td colspan="5" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1;">GRAND TOTAL</td>
-              <td id="fuelInvoiceGrandTotalSimple" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;">0</td>
+              <td id="fuelInvoiceGrandTotalSimple" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a; font-size:1.1rem; font-weight:900;">PKR 0</td>
             </tr>
           </tfoot>
         </table>
@@ -1826,7 +2013,7 @@
       <!-- Signatures & Footer -->
       <div>
         <!-- Signatures -->
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:50px; text-align:center; padding:0 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:30px; text-align:center; padding:0 20px;">
           <div style="width:200px;">
             <div style="border-top:2px solid #0f172a; padding-top:8px;">
               <strong style="font-size:0.95rem; color:#0f172a;">Admin Officer</strong>
@@ -1834,20 +2021,20 @@
           </div>
           <div style="width:200px;">
             <div style="border-top:2px solid #0f172a; padding-top:8px;">
-              <strong style="font-size:0.95rem; color:#0f172a;">Fleet Manager</strong>
+              <strong style="font-size:0.95rem; color:#0f172a;">Admin Manager</strong>
             </div>
           </div>
         </div>
         
         <!-- Bottom Footer line -->
-        <div style="text-align:center; margin-top:40px; border-top:1px solid #e2e8f0; padding-top:15px; font-size:0.8rem; color:#64748b;">
-          Vision Food &amp; Packaging • Sunder Industrial Estate, Raiwind, Lahore
+        <div style="text-align:center; margin-top:20px; border-top:1px solid #e2e8f0; padding-top:10px; font-size:0.85rem; color:#475569; font-weight:600;">
+          Plot No# 363, 364 &amp; 366 Sundar Industrial Estate, Raiwind Road, Lahore
         </div>
       </div>
     </div>
 
     <!-- ─── M-TAG INVOICE FORMAT ─── -->
-    <div id="mtagInvoiceSheet" style="display:none; padding:40px; font-family:'Outfit', sans-serif; background:#fff; color:#0f172a; min-height:297mm; box-sizing:border-box; flex-direction:column; justify-content:space-between;">
+    <div id="mtagInvoiceSheet" style="display:none; padding:40px; font-family:'Outfit', sans-serif; background:#fff; color:#0f172a; min-height:250mm; box-sizing:border-box; flex-direction:column; justify-content:space-between;">
       <div>
         <!-- Top Row -->
         <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f172a; padding-bottom:20px; margin-bottom:20px;">
@@ -1855,13 +2042,13 @@
             <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
               <img src="logo.jpg" alt="Logo" class="logo-img" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;" />
               <div>
-                <h2 style="margin:0; font-size:1.4rem; font-weight:800; color:#1e3a8a;">Vision Food &amp; Packaging</h2>
-                <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Fleet Management Department</span>
+                <h2 style="margin:0; font-size:1.4rem; font-weight:800; color:#1e3a8a;" id="invCompanyNameSimple">Vision Food &amp; Packaging Lahore</h2>
+                <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Management Department</span>
               </div>
             </div>
             <div style="font-size:0.9rem; color:#334155; line-height:1.6;">
-              <div><strong>Company Name:</strong> <span>Vision Food &amp; Packaging</span></div>
-              <div><strong>Report Type:</strong> <span>M-Tag Toll & Top-up Voucher</span></div>
+              <div><strong>Company Name:</strong> <span>Vision Food &amp; Packaging Lahore</span></div>
+              <div><strong>Report Type:</strong> <span>M-Tag Top-up Voucher</span></div>
             </div>
           </div>
           <div style="width: 45%; text-align: right; font-size:0.9rem; color:#334155; line-height:1.6;">
@@ -1878,9 +2065,7 @@
           <thead>
             <tr style="background:#ffffff; color:#1e3a8a; text-transform:uppercase; font-size:0.8rem;">
               <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a;">VEHICLE NO#</th>
-              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a;">DRIVER / ASSIGN</th>
-              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a;">ACCOUNT NO</th>
-              <th style="padding:10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;">TOLL (PKR)</th>
+              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a;">DETAILS</th>              <th style="padding:10px; text-align:left; border:1px solid #cbd5e1; color:#1e3a8a;">ACCOUNT NO</th>
               <th style="padding:10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;">TOP-UP (PKR)</th>
             </tr>
           </thead>
@@ -1888,20 +2073,18 @@
             <!-- Populated by JS -->
           </tbody>
           <tfoot>
-            <tr style="background:#f8fafc; font-weight:800; font-size:1rem;">
+            <tr style="background:#f8fafc; font-weight:800; font-size:0.95rem;">
               <td colspan="3" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1;">GRAND TOTAL</td>
-              <td id="mtagInvoiceTotalToll" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a;">0</td>
-              <td id="mtagInvoiceTotalTopup" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1; color:#22c55e;">0</td>
+              <td id="mtagInvoiceTotalTopup" style="padding:12px 10px; text-align:right; border:1px solid #cbd5e1; color:#1e3a8a; font-size:1.1rem; font-weight:900;">0</td>
             </tr>
           </tfoot>
         </table>
       </div>
 
-
       <!-- Signatures & Footer -->
       <div>
         <!-- Signatures -->
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:50px; text-align:center; padding:0 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:30px; text-align:center; padding:0 20px;">
           <div style="width:200px;">
             <div style="border-top:2px solid #0f172a; padding-top:8px;">
               <strong style="font-size:0.95rem; color:#0f172a;">Admin Officer</strong>
@@ -1915,8 +2098,8 @@
         </div>
 
         <!-- Bottom Footer line -->
-        <div style="text-align:center; margin-top:40px; border-top:1px solid #e2e8f0; padding-top:15px; font-size:0.8rem; color:#64748b;">
-          Vision Food &amp; Packaging • Sunder Industrial Estate, Raiwind, Lahore
+        <div style="text-align:center; margin-top:20px; border-top:1px solid #e2e8f0; padding-top:10px; font-size:0.85rem; color:#475569; font-weight:600;">
+          Plot No# 363, 364 &amp; 366 Sundar Industrial Estate, Raiwind Road, Lahore
         </div>
       </div>
     </div>
