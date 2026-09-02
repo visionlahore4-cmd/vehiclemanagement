@@ -85,10 +85,6 @@
       <span class="nav-icon">🧾</span>
       <span class="nav-label">Bill View</span>
     </a>
-    <a href="#" class="nav-item" data-page="reports" id="nav-reports">
-      <span class="nav-icon">📈</span>
-      <span class="nav-label">Reports</span>
-    </a>
     <a href="#" class="nav-item" data-page="monthlyreport" id="nav-monthlyreport">
       <span class="nav-icon">📅</span>
       <span class="nav-label">Monthly Report</span>
@@ -149,8 +145,8 @@
     <section class="page active" id="page-dashboard">
       <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
         <div>
-          <h1 style="font-size:1.8rem; font-weight:800; color:var(--text); margin-bottom:4px;">Fleet Command Center</h1>
-          <p class="page-sub" style="font-size:0.95rem; color:var(--text-muted);">Real-time overview of your fleet operations</p>
+          <h1 style="font-size:1.8rem; font-weight:800; color:var(--text); margin-bottom:4px;">Administration Department Controller</h1>
+          <p class="page-sub" style="font-size:0.95rem; color:var(--text-muted);">Real-time overview of fleet operations &amp; administration</p>
         </div>
         <div class="quick-actions" style="display:flex; gap:12px;">
           <button class="btn-primary" onclick="document.getElementById('nav-vehicles').click(); setTimeout(()=>document.getElementById('addVehicleBtn').click(),100);" style="background:linear-gradient(135deg, #4f46e5, #6366f1); border:none; box-shadow:0 4px 15px rgba(79,70,229,0.3); padding:10px 18px; border-radius:8px;">+ Add Vehicle</button>
@@ -375,32 +371,54 @@
     <!-- ─── FUEL ─── -->
     <section class="page" id="page-fuel">
       <div class="page-header">
-        <h1>Fuel Log</h1>
+        <div>
+          <h1 style="font-size:1.8rem; font-weight:800; color:var(--text); margin-bottom:4px;">Fuel Log</h1>
+          <p class="page-sub" style="font-size:0.95rem; color:var(--text-muted);">Track and monitor vehicle fuel vouchers month-wise</p>
+        </div>
         <button class="btn-primary" id="addFuelBtn">+ Add Fuel Entry</button>
       </div>
-      <div class="stats-grid" style="margin-bottom:2rem;">
-        <div class="stat-card card-blue">
+      <div class="stats-grid" style="margin-bottom:20px;">
+        <div class="stat-card card-purple">
           <div class="stat-icon">⛽</div>
           <div class="stat-info">
             <span class="stat-value" id="fuel-total-litres">0 L</span>
-            <span class="stat-label">Total Fuel Used</span>
+            <span class="stat-label" id="fuel-label-litres">Monthly Fuel (Litres)</span>
           </div>
         </div>
         <div class="stat-card card-green">
           <div class="stat-icon">💰</div>
           <div class="stat-info">
             <span class="stat-value" id="fuel-total-cost">PKR 0</span>
-            <span class="stat-label">Total Fuel Cost</span>
+            <span class="stat-label" id="fuel-label-cost">Monthly Fuel Cost</span>
           </div>
         </div>
         <div class="stat-card card-orange">
           <div class="stat-icon">📊</div>
           <div class="stat-info">
             <span class="stat-value" id="fuel-avg">0 L/entry</span>
-            <span class="stat-label">Avg per Entry</span>
+            <span class="stat-label" id="fuel-label-avg">Avg per Voucher</span>
+          </div>
+        </div>
+        <div class="stat-card card-blue">
+          <div class="stat-icon">🏛️</div>
+          <div class="stat-info">
+            <span class="stat-value" id="fuel-alltime-cost">PKR 0</span>
+            <span class="stat-label">Overall Fuel Cost (All Time)</span>
           </div>
         </div>
       </div>
+
+      <!-- Filters -->
+      <div class="filter-bar">
+        <select id="fuelMonthSelect" class="filter-select" style="min-width:210px; font-weight:700; color:var(--primary); background:var(--card);" onchange="renderFuel()">
+          <!-- Populated dynamically: Current Month (Default), All Months, Previous Months -->
+        </select>
+        <select id="fuelVehicleFilter" class="filter-select" onchange="renderFuel()">
+          <option value="">All Vehicles</option>
+        </select>
+        <input type="text" id="fuelSearch" class="filter-input" placeholder="Search vehicle, date, pump, batch..." oninput="renderFuel()" />
+      </div>
+
       <div class="table-wrap">
         <table class="data-table" id="fuelTable">
           <thead>
@@ -425,31 +443,6 @@
     <section class="page" id="page-bills">
       <div class="page-header">
         <h1>Bill View &amp; Invoices</h1>
-      </div>
-
-      <!-- Bill Stats -->
-      <div class="stats-grid" style="margin-bottom: 2rem;">
-        <div class="stat-card card-blue">
-          <div class="stat-icon">💵</div>
-          <div class="stat-info">
-            <span class="stat-value" id="bill-stat-total-pkr">PKR 0</span>
-            <span class="stat-label">Total Bills Amount</span>
-          </div>
-        </div>
-        <div class="stat-card card-green">
-          <div class="stat-icon">✅</div>
-          <div class="stat-info">
-            <span class="stat-value" id="bill-stat-paid">0</span>
-            <span class="stat-label">Paid Bills</span>
-          </div>
-        </div>
-        <div class="stat-card card-orange">
-          <div class="stat-icon">⏳</div>
-          <div class="stat-info">
-            <span class="stat-value" id="bill-stat-pending">0</span>
-            <span class="stat-label">Pending Approval</span>
-          </div>
-        </div>
       </div>
 
       <!-- Filters -->
@@ -657,12 +650,13 @@
         <table class="data-table" id="ledgerTable">
           <thead>
             <tr>
-              <th>SR</th>
-              <th>Type</th>
-              <th>Date</th>
-              <th>Amount (PKR)</th>
+              <th style="width:45px; text-align:center;">SR</th>
+              <th style="width:115px;">Date</th>
+              <th style="width:95px;">Type</th>
               <th>Description / Reference</th>
-              <th>Actions</th>
+              <th style="text-align:right; width:150px;">Amount (PKR)</th>
+              <th style="text-align:right; width:160px;">Running Balance</th>
+              <th style="text-align:center; width:90px;">Actions</th>
             </tr>
           </thead>
           <tbody id="ledgerBody"></tbody>

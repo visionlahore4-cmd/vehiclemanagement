@@ -225,7 +225,7 @@ function uid() {
 // ─── Navigation ───
 function applyUserRole() {
   const role = sessionStorage.getItem("fms_user_role");
-  const ids = ["nav-dashboard", "nav-vehicles", "nav-bikes", "nav-drivers", "nav-reports", "nav-monthlyreport", "nav-departments", "nav-tokentax", "nav-settings"];
+  const ids = ["nav-dashboard", "nav-vehicles", "nav-bikes", "nav-drivers", "nav-monthlyreport", "nav-departments", "nav-tokentax", "nav-settings"];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -1021,53 +1021,181 @@ function renderMaintenance() {
 
 // ─── FUEL ───
 function renderFuel() {
-  const totalLitres = state.fuel.reduce((s, f) => s + Number(f.litres), 0);
-  const totalCost   = state.fuel.reduce((s, f) => s + Number(f.cost), 0);
-  
-  // Group fuel entries by batchId
+  if (!state.fuel) state.fuel = [];
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  const curMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const curMonthName = MONTH_NAMES[now.getMonth()];
+  const curYear = now.getFullYear();
+
+  // Populate Month Filter Dropdown
+  const monthSel = document.getElementById('fuelMonthSelect');
+  let selectedMonth = curMonthKey;
+  if (monthSel) {
+    const monthSet = new Set();
+    monthSet.add(curMonthKey);
+    state.fuel.forEach(f => {
+      if (f.date) {
+        const d = new Date(f.date);
+        if (!isNaN(d.getTime())) {
+          monthSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+        }
+      }
+    });
+    const allMonths = [...monthSet].sort().reverse();
+    const prevVal = monthSel.value;
+
+    let optionsHtml = '';
+    optionsHtml += `<option value="${curMonthKey}">📅 Current Month (${curMonthName} ${curYear})</option>`;
+    optionsHtml += `<option value="all">📂 All Months (Full History)</option>`;
+
+    allMonths.forEach(m => {
+      if (m !== curMonthKey) {
+        const [y, mo] = m.split('-');
+        const mName = MONTH_NAMES[parseInt(mo, 10) - 1];
+        const count = state.fuel.filter(f => f.date && f.date.startsWith(m)).length;
+        optionsHtml += `<option value="${m}">📁 ${mName} ${y} (${count} entries)</option>`;
+      }
+    });
+
+    monthSel.innerHTML = optionsHtml;
+    if (prevVal && (prevVal === 'all' || allMonths.includes(prevVal))) {
+      monthSel.value = prevVal;
+      selectedMonth = prevVal;
+    } else {
+      monthSel.value = curMonthKey;
+      selectedMonth = curMonthKey;
+    }
+  }
+
+  // Populate Vehicle Filter Dropdown
+  const vehSel = document.getElementById('fuelVehicleFilter');
+  if (vehSel && vehSel.options.length <= 1) {
+    const prevVeh = vehSel.value;
+    vehSel.innerHTML = '<option value="">All Vehicles</option>' +
+      (state.vehicles || []).map(v => `<option value="${v.id}">${v.name} (${v.plate})</option>`).join('');
+    if (prevVeh) vehSel.value = prevVeh;
+  }
+
+  const selectedVeh = vehSel ? vehSel.value : '';
+  const search = (document.getElementById('fuelSearch')?.value || '').toLowerCase().trim();
+
+  // Calculate All-Time total fuel cost
+  const allTimeCost = state.fuel.reduce((s, f) => s + (Number(f.cost) || 0), 0);
+
+  // Filter fuel entries
+  let filteredFuel = [...state.fuel];
+  if (selectedMonth && selectedMonth !== 'all') {
+    filteredFuel = filteredFuel.filter(f => f.date && f.date.startsWith(selectedMonth));
+  }
+  if (selectedVeh) {
+    filteredFuel = filteredFuel.filter(f => {
+      const vObj = state.vehicles.find(v => v.id === selectedVeh);
+      return f.vehicle === selectedVeh || (vObj && (f.vehicle === vObj.plate || f.vehicle === `${vObj.name} (${vObj.plate})`));
+    });
+  }
+  if (search) {
+    filteredFuel = filteredFuel.filter(f => {
+      const vObj = state.vehicles.find(v => v.id === f.vehicle || v.plate === f.vehicle || `${v.name} (${v.plate})` === f.vehicle);
+      const plate = vObj ? vObj.plate : (f.vehicle || '');
+      const name = vObj ? vObj.name : '';
+      const pump = f.pumpName || '';
+      const batch = f.batchId || '';
+      return plate.toLowerCase().includes(search) ||
+             name.toLowerCase().includes(search) ||
+             pump.toLowerCase().includes(search) ||
+             batch.toLowerCase().includes(search) ||
+             (f.date || '').includes(search);
+    });
+  }
+
+  // Group filtered fuel entries by batchId
   const batches = {};
-  state.fuel.forEach(f => {
-    const bid = f.batchId || f.id; // use id as batchId for legacy ones
+  filteredFuel.forEach(f => {
+    const bid = f.batchId || f.id;
     if (!batches[bid]) batches[bid] = { batchId: bid, date: f.date, count: 0, litres: 0, cost: 0, entries: [] };
     batches[bid].count++;
-    batches[bid].litres += Number(f.litres);
-    batches[bid].cost += Number(f.cost);
+    batches[bid].litres += Number(f.litres) || 0;
+    batches[bid].cost += Number(f.cost) || 0;
     batches[bid].entries.push(f);
   });
   
   const batchList = Object.values(batches).sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  document.getElementById('fuel-total-litres').textContent = totalLitres.toFixed(2) + ' L';
-  document.getElementById('fuel-total-cost').textContent   = fmtPKR(totalCost);
-  document.getElementById('fuel-avg').textContent = batchList.length ? (totalLitres / batchList.length).toFixed(2) + ' L/voucher' : '0 L/voucher';
+  // Calculate period totals
+  const periodLitres = filteredFuel.reduce((s, f) => s + (Number(f.litres) || 0), 0);
+  const periodCost   = filteredFuel.reduce((s, f) => s + (Number(f.cost) || 0), 0);
+  const periodAvg    = batchList.length ? (periodLitres / batchList.length).toFixed(2) + ' L/voucher' : '0.00 L/voucher';
 
+  const isCurrentMonth = selectedMonth === curMonthKey;
+  const isAll = selectedMonth === 'all';
+  let periodName = 'This Month';
+  if (isAll) periodName = 'All Time';
+  else if (!isCurrentMonth) {
+    const [y, mo] = selectedMonth.split('-');
+    periodName = `${MONTH_NAMES[parseInt(mo, 10) - 1]} ${y}`;
+  }
+
+  // Update card labels
+  const labelLitres = document.getElementById('fuel-label-litres');
+  if (labelLitres) labelLitres.textContent = `${periodName} Fuel (Litres)`;
+  const labelCost = document.getElementById('fuel-label-cost');
+  if (labelCost) labelCost.textContent = `${periodName} Fuel Cost`;
+  const labelAvg = document.getElementById('fuel-label-avg');
+  if (labelAvg) labelAvg.textContent = `${periodName} Avg per Voucher`;
+
+  // Update card values
+  if (document.getElementById('fuel-total-litres')) document.getElementById('fuel-total-litres').textContent = periodLitres.toFixed(2) + ' L';
+  if (document.getElementById('fuel-total-cost'))   document.getElementById('fuel-total-cost').textContent   = fmtPKR(periodCost);
+  if (document.getElementById('fuel-avg'))          document.getElementById('fuel-avg').textContent          = periodAvg;
+  if (document.getElementById('fuel-alltime-cost')) document.getElementById('fuel-alltime-cost').textContent = fmtPKR(allTimeCost);
+
+  // Render Table
   const tbody = document.getElementById('fuelBody');
-  tbody.innerHTML = batchList.length ? batchList.map((b, i) => {
-    const primaryVehicle = b.entries[0] ? getVehicleName(b.entries[0].vehicle) : 'Unknown';
-    const vehDisplay = b.count > 1 ? `${primaryVehicle} + ${b.count - 1} more` : primaryVehicle;
-    const rate = b.litres > 0 ? (b.cost / b.litres).toFixed(2) : '—';
-    // Get average for the primary vehicle in this batch if it exists
-    const avg = b.entries[0] && b.entries[0].fuelAverage ? b.entries[0].fuelAverage : '—';
-    
-    return `
-    <tr ondblclick="openEditFuelBatch('${b.batchId}')" style="cursor:pointer;" title="Double click to edit">
-      <td>${i+1}</td>
-      <td><strong>${vehDisplay}</strong></td>
-      <td>${formatDate(b.date)}</td>
-      <td>${b.litres.toFixed(2)} L</td>
-      <td>${rate !== '—' ? 'PKR ' + rate : '—'}</td>
-      <td>${fmtPKR(b.cost)}</td>
-      <td><span style="color:var(--primary);font-weight:600;">${avg}</span></td>
-      <td><code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:0.8rem;">FUEL-${b.batchId.slice(-6)}</code></td>
-      <td>
-        <div style="display:flex;gap:6px;">
-          <button class="btn-icon edit" onclick="openEditFuelBatch('${b.batchId}')" title="Edit Voucher">✏ Edit</button>
-          <button class="btn-icon delete" onclick="confirmDelete('fuelBatch','${b.batchId}')" title="Delete Voucher">🗑</button>
-        </div>
-      </td>
-    </tr>
-  `;
-  }).join('') : `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">⛽</div><p>No fuel vouchers yet</p></div></td></tr>`;
+  if (!tbody) return;
+
+  if (batchList.length > 0) {
+    tbody.innerHTML = batchList.map((b, i) => {
+      const primaryVehicle = b.entries[0] ? getVehicleName(b.entries[0].vehicle) : 'Unknown';
+      const vehDisplay = b.count > 1 ? `${primaryVehicle} + ${b.count - 1} more` : primaryVehicle;
+      const rate = b.litres > 0 ? (b.cost / b.litres).toFixed(2) : '—';
+      const avg = b.entries[0] && b.entries[0].fuelAverage ? b.entries[0].fuelAverage : '—';
+      
+      return `
+      <tr ondblclick="openEditFuelBatch('${b.batchId}')" style="cursor:pointer;" title="Double click to edit">
+        <td style="text-align:center; font-weight:700; color:#64748b;">${i+1}</td>
+        <td><strong style="color:#1e3a8a;">${vehDisplay}</strong></td>
+        <td style="font-weight:600; color:#1e293b;">${formatDate(b.date)}</td>
+        <td style="font-weight:700; color:#4f46e5;">${b.litres.toFixed(2)} L</td>
+        <td style="color:#64748b; font-size:0.88rem;">${rate !== '—' ? 'PKR ' + rate : '—'}</td>
+        <td style="font-weight:800; color:#15803d; font-size:0.95rem;">${fmtPKR(b.cost)}</td>
+        <td><span style="background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:10px; font-weight:700; font-size:0.78rem;">${avg}</span></td>
+        <td><code style="background:var(--bg3); padding:2px 6px; border-radius:4px; font-size:0.8rem; font-weight:600;">FUEL-${b.batchId.slice(-6)}</code></td>
+        <td>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-icon edit" onclick="openEditFuelBatch('${b.batchId}')" title="Edit Voucher">✏ Edit</button>
+            <button class="btn-icon delete" onclick="confirmDelete('fuelBatch','${b.batchId}')" title="Delete Voucher">🗑</button>
+          </div>
+        </td>
+      </tr>
+    `;
+    }).join('');
+  } else {
+    const emptyMsg = isCurrentMonth
+      ? `No fuel vouchers recorded for ${curMonthName} ${curYear} yet.`
+      : `No fuel vouchers found for ${periodName}.`;
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align:center; padding:35px 20px; color:#64748b;">
+          <div style="font-size:1.05rem; font-weight:700; color:#334155; margin-bottom:8px;">${emptyMsg}</div>
+          <div style="font-size:0.9rem; color:#64748b;">
+            💡 Pichlay mahinay ka fuel record dekhne ke liye uper dropdown se <a href="javascript:void(0)" onclick="document.getElementById('fuelMonthSelect').value='all';renderFuel();" style="color:#2563eb; font-weight:700; text-decoration:underline;">All Months</a> ya August select karein.
+          </div>
+        </td>
+      </tr>
+    `;
+  }
 }
 
 // ─── REPORTS ───
@@ -1901,26 +2029,43 @@ function renderLedger() {
   const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const now = new Date();
   const curMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const curMonthName = MONTH_NAMES[now.getMonth()];
+  const curYear = now.getFullYear();
 
-  // Populate month selector dropdown if not already populated or on data update
-  const monthSel = document.getElementById('ledgerMonthSelect');
-  if (monthSel) {
-    const monthSet = new Set();
-    monthSet.add(curMonthKey);
-    (state.ledger || []).forEach(e => {
-      if (e.date) {
-        const d = new Date(e.date);
-        if (!isNaN(d.getTime())) {
-          monthSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
-        }
+  // Sort ALL records chronologically first to calculate running balance accurately
+  const allChronological = [...state.ledger].sort((a, b) => new Date(a.date) - new Date(b.date));
+  let runningCumBal = 0;
+  allChronological.forEach(e => {
+    const amt = Number(e.amount) || 0;
+    if (e.type === 'Received') runningCumBal += amt;
+    else if (e.type === 'Returned') runningCumBal -= amt;
+    e._runningBal = runningCumBal;
+  });
+
+  // Calculate overall all-time totals
+  const allTimeIn = allChronological.filter(e => e.type === 'Received').reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const allTimeOut = allChronological.filter(e => e.type === 'Returned').reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const allTimeBalance = allTimeIn - allTimeOut;
+
+  // Build month set from all transactions + current month
+  const monthSet = new Set();
+  monthSet.add(curMonthKey);
+  (state.ledger || []).forEach(e => {
+    if (e.date) {
+      const d = new Date(e.date);
+      if (!isNaN(d.getTime())) {
+        monthSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
       }
-    });
-    const allMonths = [...monthSet].sort().reverse();
-    const prevVal = monthSel.value;
+    }
+  });
+  const allMonths = [...monthSet].sort().reverse();
 
+  // Populate month dropdown
+  const monthSel = document.getElementById('ledgerMonthSelect');
+  let selectedMonth = curMonthKey;
+  if (monthSel) {
+    const prevVal = monthSel.value;
     let optionsHtml = '';
-    const curYear = now.getFullYear();
-    const curMonthName = MONTH_NAMES[now.getMonth()];
     optionsHtml += `<option value="${curMonthKey}">📅 Current Month (${curMonthName} ${curYear})</option>`;
     optionsHtml += `<option value="all">📂 All Months (Full History)</option>`;
 
@@ -1928,99 +2073,157 @@ function renderLedger() {
       if (m !== curMonthKey) {
         const [y, mo] = m.split('-');
         const mName = MONTH_NAMES[parseInt(mo, 10) - 1];
-        optionsHtml += `<option value="${m}">📁 ${mName} ${y}</option>`;
+        const count = state.ledger.filter(e => e.date && e.date.startsWith(m)).length;
+        optionsHtml += `<option value="${m}">📁 ${mName} ${y} (${count} entries)</option>`;
       }
     });
 
     monthSel.innerHTML = optionsHtml;
     if (prevVal && (prevVal === 'all' || allMonths.includes(prevVal))) {
       monthSel.value = prevVal;
+      selectedMonth = prevVal;
     } else {
-      monthSel.value = curMonthKey; // Default: clean current month view
+      // If current month has 0 entries but previous month has entries, default to current month (clean start)
+      monthSel.value = curMonthKey;
+      selectedMonth = curMonthKey;
     }
   }
 
-  const selectedMonth = monthSel ? monthSel.value : curMonthKey;
   const search = (document.getElementById('ledgerSearch')?.value || '').toLowerCase();
   const typeFilter = document.getElementById('ledgerTypeFilter')?.value || '';
   const tbody = document.getElementById('ledgerBody');
   if (!tbody) return;
 
-  // Calculate All-Time totals
-  let allTimeIn = 0;
-  let allTimeOut = 0;
-  (state.ledger || []).forEach(e => {
-    if (e.type === 'Received') allTimeIn += Number(e.amount) || 0;
-    if (e.type === 'Returned') allTimeOut += Number(e.amount) || 0;
-  });
-  const allTimeBalance = allTimeIn - allTimeOut;
+  // Calculate opening balance, period In, period Out, and closing balance
+  let openingBal = 0;
+  let periodEntries = [];
+  let periodIn = 0;
+  let periodOut = 0;
+  let periodClosingBal = 0;
+  let isAll = selectedMonth === 'all';
+  let isCurrentMonth = selectedMonth === curMonthKey;
+  let periodName = 'This Month';
 
-  // Filter entries by selected month
-  let entries = [...state.ledger];
-  if (selectedMonth && selectedMonth !== 'all') {
-    entries = entries.filter(e => e.date && e.date.startsWith(selectedMonth));
+  if (isAll) {
+    periodName = 'All Time';
+    openingBal = 0;
+    periodEntries = allChronological;
+    periodIn = allTimeIn;
+    periodOut = allTimeOut;
+    periodClosingBal = allTimeBalance;
+  } else {
+    const [y, mo] = selectedMonth.split('-');
+    const mName = MONTH_NAMES[parseInt(mo, 10) - 1];
+    periodName = isCurrentMonth ? `This Month (${mName} ${y})` : `${mName} ${y}`;
+
+    // Opening Balance = Sum of all transactions before 1st of selectedMonth
+    allChronological.forEach(e => {
+      if (e.date && e.date < selectedMonth + '-01') {
+        const amt = Number(e.amount) || 0;
+        if (e.type === 'Received') openingBal += amt;
+        else if (e.type === 'Returned') openingBal -= amt;
+      }
+    });
+
+    periodEntries = allChronological.filter(e => e.date && e.date.startsWith(selectedMonth));
+    periodIn = periodEntries.filter(e => e.type === 'Received').reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    periodOut = periodEntries.filter(e => e.type === 'Returned').reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    periodClosingBal = openingBal + periodIn - periodOut;
   }
 
-  if (typeFilter) entries = entries.filter(e => e.type === typeFilter);
-  if (search) entries = entries.filter(e =>
+  // Filter display entries by search & type
+  let displayEntries = [...periodEntries];
+  if (typeFilter) displayEntries = displayEntries.filter(e => e.type === typeFilter);
+  if (search) displayEntries = displayEntries.filter(e =>
     (e.desc || '').toLowerCase().includes(search) ||
     (e.date || '').toLowerCase().includes(search)
   );
 
-  // Sort by date descending
-  entries.sort((a,b) => new Date(b.date) - new Date(a.date));
+  // Sort descending (newest at top) for the table
+  displayEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  let totalIn = 0;
-  let totalOut = 0;
-  let totalPending = 0;
+  // Build Table HTML
+  let rowsHtml = '';
 
-  const isCurrentMonth = selectedMonth === curMonthKey;
-  const isAll = selectedMonth === 'all';
-  let periodName = 'This Month';
-  if (isAll) periodName = 'All Time';
-  else if (!isCurrentMonth) {
-    const [y, mo] = selectedMonth.split('-');
-    periodName = `${MONTH_NAMES[parseInt(mo,10)-1]} ${y}`;
+  // 1. Opening Balance Row (Shown when a specific month is selected)
+  if (!isAll && !typeFilter && !search) {
+    const opSign = openingBal >= 0 ? '+' : '-';
+    rowsHtml += `
+      <tr style="background:#f8fafc; font-weight:700; border-bottom:2px solid #cbd5e1;">
+        <td style="text-align:center; color:#64748b;">📌</td>
+        <td style="color:#64748b; font-size:0.88rem;">${selectedMonth}-01</td>
+        <td><span style="background:#475569; color:#fff; padding:2px 8px; border-radius:10px; font-size:0.75rem; font-weight:700;">🏛️ Opening</span></td>
+        <td style="color:#334155;"><strong>Opening Balance</strong> <span style="font-size:0.8rem; color:#64748b;">(Carried forward from previous months)</span></td>
+        <td style="text-align:right; color:${openingBal >= 0 ? '#15803d' : '#b91c1c'}; font-weight:800; font-size:0.95rem;">
+          ${opSign} PKR ${Math.abs(openingBal).toLocaleString()}
+        </td>
+        <td style="text-align:right; font-weight:800; color:#1e3a8a; font-size:1.02rem;">
+          PKR ${openingBal.toLocaleString()}
+        </td>
+        <td style="text-align:center; color:#94a3b8;">—</td>
+      </tr>
+    `;
   }
 
-  const emptyMsg = isCurrentMonth
-    ? `No transactions recorded for ${curMonthName} ${curYear} yet. Current month is fresh & clean! 🌿`
-    : `No transactions found for ${periodName}.`;
+  // 2. Transaction Rows
+  if (displayEntries.length > 0) {
+    rowsHtml += displayEntries.map((e, i) => {
+      const typeColor = e.type === 'Received' ? '#22c55e' : '#f59e0b';
+      const typeLabel = e.type === 'Received' ? '📥 In' : '📤 Out';
+      const pending = Number(e.pendingAmt) || 0;
+      const rowBg = pending > 0 ? 'background:rgba(239,68,68,0.07); border-left:4px solid #ef4444;' : '';
+      const pendingBadge = pending > 0
+        ? `<span style="background:#fef3c7; color:#b45309; border:1px solid #f59e0b; padding:2px 8px; border-radius:10px; font-size:0.78rem; font-weight:700; margin-left:6px;">⚠️ Pending: PKR ${pending.toLocaleString()}</span>`
+        : '';
+      const totalBillNote = Number(e.totalBill) > 0
+        ? `<div style="font-size:0.78rem; color:#64748b; margin-top:2px;">Total Bill: PKR ${Number(e.totalBill).toLocaleString()}</div>`
+        : '';
+      const amtColor = e.type === 'Received' ? '#15803d' : '#d97706';
+      const amtSign = e.type === 'Received' ? '+' : '-';
 
-  tbody.innerHTML = entries.length ? entries.map((e, i) => {
-    if (e.type === 'Received') totalIn += Number(e.amount) || 0;
-    if (e.type === 'Returned') totalOut += Number(e.amount) || 0;
-    const pending = Number(e.pendingAmt) || 0;
-    if (pending > 0) totalPending += pending;
+      return `
+        <tr style="${rowBg}">
+          <td style="text-align:center; font-weight:700; color:#64748b;">${i + 1}</td>
+          <td style="font-weight:600; color:#1e293b;">${e.date || '—'}</td>
+          <td><span style="background:${typeColor}; color:#fff; padding:2px 10px; border-radius:12px; font-size:0.8rem; font-weight:700;">${typeLabel}</span></td>
+          <td>
+            <div style="font-weight:600; color:#0f172a;">${e.desc || '—'}</div>
+            ${pendingBadge}
+            ${totalBillNote}
+          </td>
+          <td style="text-align:right; font-weight:800; color:${amtColor}; font-size:0.98rem;">
+            ${amtSign} PKR ${Number(e.amount || 0).toLocaleString()}
+          </td>
+          <td style="text-align:right; font-weight:800; color:#1e3a8a; font-size:1rem;">
+            PKR ${Number(e._runningBal || 0).toLocaleString()}
+          </td>
+          <td style="text-align:center;">
+            <button class="btn-icon-sm" onclick="editLedgerEntry('${e.id}')" title="Edit">✏️</button>
+            <button class="btn-icon-sm" onclick="deleteLedgerEntry('${e.id}')" title="Delete" style="color:#ef4444;">🗑️</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } else {
+    // Empty state message
+    const emptyMsg = isCurrentMonth
+      ? `No new transactions recorded for ${curMonthName} ${curYear} yet.`
+      : `No transactions found for ${periodName}.`;
 
-    const typeColor = e.type === 'Received' ? '#22c55e' : '#f59e0b';
-    const typeLabel = e.type === 'Received' ? '📥 In' : '📤 Out';
-    const rowBg = pending > 0 ? 'background:rgba(239,68,68,0.07);border-left:4px solid #ef4444;' : '';
-    const pendingBadge = pending > 0
-      ? `<span style="background:#fef3c7;color:#b45309;border:1px solid #f59e0b;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:700;margin-left:6px;">⚠️ Pending: PKR ${pending.toLocaleString()}</span>`
-      : '';
-    const totalBillNote = Number(e.totalBill) > 0
-      ? `<div style="font-size:0.78rem;color:#64748b;margin-top:2px;">Total Bill: PKR ${Number(e.totalBill).toLocaleString()}</div>`
-      : '';
+    rowsHtml += `
+      <tr>
+        <td colspan="7" style="text-align:center; padding:32px 20px; color:#64748b;">
+          <div style="font-size:1.02rem; font-weight:700; color:#334155; margin-bottom:8px;">${emptyMsg}</div>
+          <div style="font-size:0.9rem; color:#64748b;">
+            Current Available Balance: <strong style="color:#1e3a8a; font-size:1rem;">PKR ${periodClosingBal.toLocaleString()}</strong>
+            ${allMonths.length > 1 ? ` · <a href="javascript:void(0)" onclick="document.getElementById('ledgerMonthSelect').value='all';renderLedger();" style="color:#2563eb; font-weight:700; text-decoration:underline;">Click here to view All Months History</a>` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }
 
-    return `<tr style="${rowBg}">
-      <td>${i + 1}</td>
-      <td><span style="background:${typeColor};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.82rem;">${typeLabel}</span></td>
-      <td>${e.date || '—'}</td>
-      <td>
-        <strong style="font-size:1rem;">PKR ${Number(e.amount||0).toLocaleString()}</strong>
-        ${totalBillNote}
-      </td>
-      <td>
-        ${e.desc || '—'}
-        ${pendingBadge}
-      </td>
-      <td>
-        <button class="btn-icon-sm" onclick="editLedgerEntry('${e.id}')" title="Edit">✏️</button>
-        <button class="btn-icon-sm" onclick="deleteLedgerEntry('${e.id}')" title="Delete" style="color:#ef4444;">🗑️</button>
-      </td>
-    </tr>`;
-  }).join('') : `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);font-weight:600;">${emptyMsg}</td></tr>`;
+  tbody.innerHTML = rowsHtml;
 
   // Update card labels
   const labelIn = document.getElementById('ledger-label-in');
@@ -2028,14 +2231,13 @@ function renderLedger() {
   const labelOut = document.getElementById('ledger-label-out');
   if (labelOut) labelOut.textContent = `${periodName} Returned (Out)`;
   const labelBalance = document.getElementById('ledger-label-balance');
-  if (labelBalance) labelBalance.textContent = `${periodName} Balance`;
+  if (labelBalance) labelBalance.textContent = isAll ? 'Overall Net Balance' : `${periodName} Closing Balance`;
 
   // Update card values
-  if (document.getElementById('ledger-total-in')) document.getElementById('ledger-total-in').textContent = 'PKR ' + totalIn.toLocaleString();
-  if (document.getElementById('ledger-total-out')) document.getElementById('ledger-total-out').textContent = 'PKR ' + totalOut.toLocaleString();
+  if (document.getElementById('ledger-total-in')) document.getElementById('ledger-total-in').textContent = 'PKR ' + periodIn.toLocaleString();
+  if (document.getElementById('ledger-total-out')) document.getElementById('ledger-total-out').textContent = 'PKR ' + periodOut.toLocaleString();
   if (document.getElementById('ledger-balance')) {
-    const net = totalIn - totalOut;
-    document.getElementById('ledger-balance').textContent = (net < 0 ? '- PKR ' + Math.abs(net).toLocaleString() : 'PKR ' + net.toLocaleString());
+    document.getElementById('ledger-balance').textContent = (periodClosingBal < 0 ? '- PKR ' + Math.abs(periodClosingBal).toLocaleString() : 'PKR ' + periodClosingBal.toLocaleString());
   }
   if (document.getElementById('ledger-total-balance')) {
     document.getElementById('ledger-total-balance').textContent = (allTimeBalance < 0 ? '- PKR ' + Math.abs(allTimeBalance).toLocaleString() : 'PKR ' + allTimeBalance.toLocaleString());
@@ -3059,9 +3261,12 @@ function renderBills() {
     `;
   }).join('') : `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🧾</div><p>No bills found</p></div></td></tr>`;
 
-  document.getElementById('bill-stat-total-pkr').textContent = fmtPKR(totalAmount);
-  document.getElementById('bill-stat-paid').textContent = paidCount;
-  document.getElementById('bill-stat-pending').textContent = pendingCount;
+  const statTotalEl = document.getElementById('bill-stat-total-pkr');
+  if (statTotalEl) statTotalEl.textContent = fmtPKR(totalAmount);
+  const statPaidEl = document.getElementById('bill-stat-paid');
+  if (statPaidEl) statPaidEl.textContent = paidCount;
+  const statPendingEl = document.getElementById('bill-stat-pending');
+  if (statPendingEl) statPendingEl.textContent = pendingCount;
 }
 
 function openEditBill(id) {
