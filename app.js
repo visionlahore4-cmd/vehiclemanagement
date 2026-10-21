@@ -441,44 +441,40 @@ function renderMonthlyReportPage() {
     </tr>`;
   }
 
-  // Also render fuel details tab
+  // Also render fuel details tab and maintenance details tab
   renderFuelDetailsTab(selectedKey, selYear, selMonth);
+  renderMaintDetailsTab(selectedKey, selYear, selMonth);
 }
 
 // ─── Tab Switcher ───
 function switchMonthlyTab(tab) {
-  const tabSummary    = document.getElementById('tabSummary');
-  const tabFuelDetail = document.getElementById('tabFuelDetail');
-  const btnSummary    = document.getElementById('tabBtnSummary');
-  const btnFuelDetail = document.getElementById('tabBtnFuelDetail');
+  const tabSummary     = document.getElementById('tabSummary');
+  const tabFuelDetail  = document.getElementById('tabFuelDetail');
+  const tabMaintDetail = document.getElementById('tabMaintDetail');
+  const btnSummary     = document.getElementById('tabBtnSummary');
+  const btnFuelDetail  = document.getElementById('tabBtnFuelDetail');
+  const btnMaintDetail = document.getElementById('tabBtnMaintDetail');
 
-  if (tab === 'summary') {
-    if (tabSummary)    tabSummary.style.display    = 'block';
-    if (tabFuelDetail) tabFuelDetail.style.display  = 'none';
-    if (btnSummary) {
-      btnSummary.className    = 'btn-primary';
-      btnSummary.style.background    = '#1e3a8a';
-      btnSummary.style.borderColor   = '#1e3a8a';
+  const setBtnActive = (btn, active) => {
+    if (!btn) return;
+    if (active) {
+      btn.className = 'btn-primary';
+      btn.style.background = '#1e3a8a';
+      btn.style.borderColor = '#1e3a8a';
+    } else {
+      btn.className = 'btn-secondary';
+      btn.style.background = '';
+      btn.style.borderColor = '';
     }
-    if (btnFuelDetail) {
-      btnFuelDetail.className = 'btn-secondary';
-      btnFuelDetail.style.background = '';
-      btnFuelDetail.style.borderColor = '';
-    }
-  } else {
-    if (tabSummary)    tabSummary.style.display    = 'none';
-    if (tabFuelDetail) tabFuelDetail.style.display  = 'block';
-    if (btnFuelDetail) {
-      btnFuelDetail.className = 'btn-primary';
-      btnFuelDetail.style.background    = '#1e3a8a';
-      btnFuelDetail.style.borderColor   = '#1e3a8a';
-    }
-    if (btnSummary) {
-      btnSummary.className    = 'btn-secondary';
-      btnSummary.style.background    = '';
-      btnSummary.style.borderColor   = '';
-    }
-  }
+  };
+
+  if (tabSummary)     tabSummary.style.display     = tab === 'summary' ? 'block' : 'none';
+  if (tabFuelDetail)  tabFuelDetail.style.display  = tab === 'fueldetail' ? 'block' : 'none';
+  if (tabMaintDetail) tabMaintDetail.style.display = tab === 'maintdetail' ? 'block' : 'none';
+
+  setBtnActive(btnSummary, tab === 'summary');
+  setBtnActive(btnFuelDetail, tab === 'fueldetail');
+  setBtnActive(btnMaintDetail, tab === 'maintdetail');
 }
 
 // ─── Render Fuel Details Tab ───
@@ -579,6 +575,107 @@ function renderFuelDetailsTab(selectedKey, yr, mo) {
   container.innerHTML = html;
 }
 
+// ─── Render Maintenance Details Tab ───
+function renderMaintDetailsTab(selectedKey, yr, mo) {
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const container = document.getElementById('maintDetailsContainer');
+  const label     = document.getElementById('maintDetailMonthLabel');
+  if (!container) return;
+
+  if (label) label.textContent = `${MONTH_NAMES[mo - 1]} ${yr}`;
+
+  // Gather all maintenance entries for this month
+  const monthMaintEntries = (state.maintenance || []).filter(m => {
+    if (!m.date) return false;
+    const d = new Date(m.date);
+    return d.getFullYear() === yr && (d.getMonth() + 1) === mo;
+  });
+
+  if (monthMaintEntries.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.95rem;">No maintenance entries found for this month.</div>`;
+    return;
+  }
+
+  // Group maintenance entries by vehicle
+  const byVehicle = {};
+  monthMaintEntries.forEach(m => {
+    const vObj = state.vehicles.find(v => v.id === m.vehicle || `${v.name} (${v.plate})` === m.vehicle || v.plate === m.vehicle);
+    const vId  = vObj ? vObj.id : (m.vehicle || 'unknown');
+    const plate = vObj ? vObj.plate : (m.vehicle || '—');
+    const model = vObj ? vObj.name  : '—';
+    const defaultDriver = vObj ? getDriverName(vObj.driver) : '—';
+    if (!byVehicle[vId]) byVehicle[vId] = { plate, model, defaultDriver, entries: [] };
+    byVehicle[vId].entries.push(m);
+  });
+
+  // Sort each vehicle's entries by date ascending
+  Object.values(byVehicle).forEach(vData => {
+    vData.entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+  });
+
+  // Sort vehicles by plate
+  const sortedVehicles = Object.values(byVehicle).sort((a, b) => a.plate.localeCompare(b.plate));
+
+  let html = '';
+  sortedVehicles.forEach(vData => {
+    const totalCost = vData.entries.reduce((s, m) => s + (Number(m.cost) || 0), 0);
+    const jobsCount = vData.entries.length;
+
+    const rows = vData.entries.map((m, idx) => {
+      const driverName = m.driver ? getDriverName(m.driver) : vData.defaultDriver;
+      const statusHtml = statusBadge(m.status || 'Completed');
+      return `
+        <tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+          <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#64748b; font-size:0.85rem;">${idx + 1}</td>
+          <td style="padding:9px 12px; border:1px solid #e2e8f0; font-weight:600; color:#0f172a;">${formatDate(m.date)}</td>
+          <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#1e3a8a; font-weight:700;">${m.type || 'General Maintenance'}</td>
+          <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#475569; font-weight:600;">${driverName}</td>
+          <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#ea580c; font-weight:700; text-align:right;">${fmtPKR(m.cost)}</td>
+          <td style="padding:9px 12px; border:1px solid #e2e8f0; text-align:center;">${statusHtml}</td>
+          <td style="padding:9px 12px; border:1px solid #e2e8f0; color:#475569; font-size:0.85rem; max-width:260px;">${m.notes || '—'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    html += `
+      <div class="maint-detail-vehicle-block" data-search="${vData.plate.toLowerCase()} ${vData.model.toLowerCase()} ${vData.defaultDriver.toLowerCase()} ${vData.entries.map(e => (e.type||'') + ' ' + (e.notes||'')).join(' ').toLowerCase()}" style="margin-bottom:28px;">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
+          <span style="background:#1e3a8a; color:#fff; font-weight:800; font-size:0.85rem; padding:4px 14px; border-radius:20px;">🚗 ${vData.plate}</span>
+          <span style="color:#64748b; font-size:0.85rem; font-weight:600;">${vData.model}</span>
+          <span style="margin-left:auto; background:#ffedd5; color:#c2410c; font-weight:800; font-size:0.85rem; padding:4px 14px; border-radius:20px;">Total: ${fmtPKR(totalCost)} · ${jobsCount} record${jobsCount > 1 ? 's' : ''}</span>
+        </div>
+        <div style="overflow-x:auto; border-radius:10px; border:1px solid #e2e8f0; box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+          <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+            <thead>
+              <tr style="background:#f1f5f9;">
+                <th style="padding:9px 12px; text-align:left; border:1px solid #e2e8f0; color:#64748b; font-size:0.8rem; font-weight:700;">#</th>
+                <th style="padding:9px 12px; text-align:left; border:1px solid #e2e8f0; color:#1e3a8a; font-weight:700;">DATE</th>
+                <th style="padding:9px 12px; text-align:left; border:1px solid #e2e8f0; color:#1e3a8a; font-weight:700;">MAINTENANCE TYPE</th>
+                <th style="padding:9px 12px; text-align:left; border:1px solid #e2e8f0; color:#64748b; font-weight:700;">DRIVER</th>
+                <th style="padding:9px 12px; text-align:right; border:1px solid #e2e8f0; color:#ea580c; font-weight:700;">AMOUNT (PKR)</th>
+                <th style="padding:9px 12px; text-align:center; border:1px solid #e2e8f0; color:#64748b; font-weight:700;">STATUS</th>
+                <th style="padding:9px 12px; text-align:left; border:1px solid #e2e8f0; color:#64748b; font-weight:700;">WORK DETAILS / NOTES</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+            <tfoot>
+              <tr style="background:#fff7ed; font-weight:800; border-top:2px solid #0f172a;">
+                <td colspan="4" style="padding:10px 12px; border:1px solid #e2e8f0; text-align:right; color:#0f172a; font-size:0.9rem;">TOTAL MAINTENANCE</td>
+                <td style="padding:10px 12px; border:1px solid #e2e8f0; text-align:right; color:#c2410c; font-size:1rem;">${fmtPKR(totalCost)}</td>
+                <td colspan="2" style="padding:10px 12px; border:1px solid #e2e8f0;"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
 // ─── Filter Fuel Details by Vehicle Search ───
 function filterFuelDetails() {
   const search = (document.getElementById('fuelDetailSearch')?.value || '').toLowerCase().trim();
@@ -600,6 +697,31 @@ function filterFuelDetails() {
     noResultEl.style.cssText = 'text-align:center; padding:30px; color:var(--text-muted); font-size:0.95rem; font-weight:600;';
     noResultEl.textContent = '❌ Koi vehicle nahi mila. Dobara search karein.';
     document.getElementById('fuelDetailsContainer')?.after(noResultEl);
+  }
+  noResultEl.style.display = (visibleCount === 0 && search) ? 'block' : 'none';
+}
+
+// ─── Filter Maintenance Details by Vehicle Search ───
+function filterMaintDetails() {
+  const search = (document.getElementById('maintDetailSearch')?.value || '').toLowerCase().trim();
+  const blocks = document.querySelectorAll('.maint-detail-vehicle-block');
+  let visibleCount = 0;
+
+  blocks.forEach(block => {
+    const searchData = block.getAttribute('data-search') || '';
+    const match = !search || searchData.includes(search);
+    block.style.display = match ? 'block' : 'none';
+    if (match) visibleCount++;
+  });
+
+  // Show "no results" message if nothing matches
+  let noResultEl = document.getElementById('maintDetailNoResult');
+  if (!noResultEl) {
+    noResultEl = document.createElement('div');
+    noResultEl.id = 'maintDetailNoResult';
+    noResultEl.style.cssText = 'text-align:center; padding:30px; color:var(--text-muted); font-size:0.95rem; font-weight:600;';
+    noResultEl.textContent = '❌ Koi maintenance record nahi mila. Dobara search karein.';
+    document.getElementById('maintDetailsContainer')?.after(noResultEl);
   }
   noResultEl.style.display = (visibleCount === 0 && search) ? 'block' : 'none';
 }
@@ -711,7 +833,12 @@ function renderDashboard() {
   if (document.getElementById('stat-bikes')) document.getElementById('stat-bikes').textContent = bikeCount;
   
   const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-  const monthlyFuelCost = state.fuel.reduce((sum, f) => f.date.startsWith(currentMonth) ? sum + (f.cost || 0) : sum, 0);
+  const monthlyFuelCost = state.fuel.reduce((sum, f) => {
+    if (f && f.date && typeof f.date === 'string' && f.date.startsWith(currentMonth)) {
+      return sum + (Number(f.cost) || 0);
+    }
+    return sum;
+  }, 0);
   if (document.getElementById('stat-fuel-cost')) document.getElementById('stat-fuel-cost').textContent = fmtPKR(monthlyFuelCost);
   
   const pendingMaintenance = state.maintenance.filter(m => m.status === 'Pending').length;
@@ -986,16 +1113,53 @@ function renderDrivers() {
 
 // ─── MAINTENANCE ───
 function renderMaintenance() {
+  if (!state.maintenance) state.maintenance = [];
   const search = (document.getElementById('maintenanceSearch')?.value || '').toLowerCase();
   const statusFilter = document.getElementById('maintenanceStatusFilter')?.value || '';
   
+  // Populate Month Filter Dropdown
+  const monthSel = document.getElementById('maintenanceMonthSelect');
+  let selectedMonth = 'all';
+  if (monthSel) {
+    const prevVal = monthSel.value;
+    const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const monthSet = new Set();
+    state.maintenance.forEach(m => {
+      if (m.date) {
+        const d = new Date(m.date);
+        if (!isNaN(d.getTime())) {
+          monthSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+        }
+      }
+    });
+    const allMonths = [...monthSet].sort().reverse();
+    
+    let optionsHtml = '<option value="all">📁 All Months (Full History)</option>';
+    allMonths.forEach(m => {
+      const [y, mo] = m.split('-');
+      const mName = MONTH_NAMES[parseInt(mo, 10) - 1];
+      const count = state.maintenance.filter(x => x.date && x.date.startsWith(m)).length;
+      optionsHtml += `<option value="${m}">📅 ${mName} ${y} (${count} entries)</option>`;
+    });
+    monthSel.innerHTML = optionsHtml;
+    
+    if (prevVal === 'all' || allMonths.includes(prevVal)) {
+      monthSel.value = prevVal;
+      selectedMonth = prevVal;
+    } else if (allMonths.length > 0 && prevVal !== 'all') {
+      monthSel.value = allMonths[0]; // default to most recent month if previous value invalid
+      selectedMonth = allMonths[0];
+    }
+  }
+
   const filtered = state.maintenance.filter(m => {
     const vName = getVehicleName(m.vehicle).toLowerCase();
     const mType = (m.type || '').toLowerCase();
     const mNotes = (m.notes || '').toLowerCase();
     const matchSearch = !search || vName.includes(search) || mType.includes(search) || mNotes.includes(search);
     const matchStatus = !statusFilter || m.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchMonth = selectedMonth === 'all' || (m.date && m.date.startsWith(selectedMonth));
+    return matchSearch && matchStatus && matchMonth;
   });
 
   const tbody = document.getElementById('maintenanceBody');
@@ -1789,26 +1953,86 @@ function renderMTag() {
   const tbody = document.getElementById('mtagBody');
   if (!tbody) return;
 
+  // Populate Month Filter Dropdown
+  const monthSel = document.getElementById('mtagMonthSelect');
+  let selectedMonth = 'all';
+  if (monthSel) {
+    const prevVal = monthSel.value;
+    const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const now = new Date();
+    const curMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const curMonthName = MONTH_NAMES[now.getMonth()];
+    const curYear = now.getFullYear();
+
+    const monthSet = new Set();
+    monthSet.add(curMonthKey); // always include current month
+    state.mtag.forEach(m => {
+      if (m.date) {
+        const d = new Date(m.date);
+        if (!isNaN(d.getTime())) {
+          monthSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+        }
+      }
+    });
+    const allMonths = [...monthSet].sort().reverse();
+    
+    // Always include current month first, then "All Months", then rest
+    let optionsHtml = `<option value="${curMonthKey}">📅 Current Month (${curMonthName} ${curYear})</option>`;
+    optionsHtml += `<option value="all">📁 All Months (Full History)</option>`;
+
+    allMonths.forEach(m => {
+      if (m === curMonthKey) return; // already added above
+      const [y, mo] = m.split('-');
+      const mName = MONTH_NAMES[parseInt(mo, 10) - 1];
+      let count = 0;
+      state.mtag.forEach(entry => {
+          if (entry.date && entry.date.startsWith(m)) {
+              count += (entry.vehicles || []).length;
+          }
+      });
+      optionsHtml += `<option value="${m}">📅 ${mName} ${y} (${count} entries)</option>`;
+    });
+    monthSel.innerHTML = optionsHtml;
+    
+    if (prevVal === 'all' || allMonths.includes(prevVal)) {
+      monthSel.value = prevVal;
+      selectedMonth = prevVal;
+    } else if (allMonths.length > 0 && prevVal !== 'all') {
+      monthSel.value = allMonths[0];
+      selectedMonth = allMonths[0];
+    }
+  }
+
   // Flatten all vehicle rows from all M-Tag entries for display
   let rows = [];
   state.mtag.forEach(entry => {
+    // Apply Month Filter
+    if (selectedMonth !== 'all' && !(entry.date && entry.date.startsWith(selectedMonth))) return;
+    
     (entry.vehicles || []).forEach((v, vi) => {
       if (typeFilter && v.vehicleType !== typeFilter) return;
       if (search && !(v.plate || '').toLowerCase().includes(search) &&
           !(v.accountNo || '').toLowerCase().includes(search) &&
           !(v.assign || '').toLowerCase().includes(search) &&
-          !(entry.billNo || '').toLowerCase().includes(search)) return;
-      rows.push({ ...v, billNo: entry.billNo, billDate: entry.date, entryId: entry.id, rowIdx: vi });
+          !(entry.billNo || '').toLowerCase().includes(search) &&
+          !(entry.period || '').toLowerCase().includes(search)) return;
+      rows.push({ ...v, billNo: entry.billNo, billDate: entry.date, period: entry.period, status: entry.status, vendor: entry.vendor, entryId: entry.id, rowIdx: vi, grandTotal: entry.grandTotal });
     });
   });
 
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text-muted);">No M-Tag entries found. Click "+ Add M-Tag Entry" to begin.</td></tr>`;
+    const selText = monthSel ? (monthSel.options[monthSel.selectedIndex]?.text || '') : '';
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text-muted);">
+      No M-Tag entries found for <strong>${selText}</strong>.<br>
+      <small>Select "📁 All Months (Full History)" from the dropdown above to see all records, or click "+ Add M-Tag Entry" to add new.</small>
+    </td></tr>`;
     return;
   }
 
   tbody.innerHTML = rows.map((r, i) => {
     const typeColor = r.vehicleType === 'Admin' ? '#3b82f6' : '#8b5cf6';
+    const statusColor = (r.status === 'Paid') ? '#16a34a' : '#d97706';
+    const statusLabel = r.status || 'Pending';
     return `<tr>
       <td>${i + 1}</td>
       <td><span style="background:${typeColor};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.82rem;">${r.vehicleType || '—'}</span></td>
@@ -2894,7 +3118,12 @@ function updateDashStats() {
   if (document.getElementById('stat-bikes')) document.getElementById('stat-bikes').textContent = bikeCount;
   
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const monthlyFuelCost = state.fuel.reduce((sum, f) => f.date.startsWith(currentMonth) ? sum + (f.cost || 0) : sum, 0);
+  const monthlyFuelCost = state.fuel.reduce((sum, f) => {
+    if (f && f.date && typeof f.date === 'string' && f.date.startsWith(currentMonth)) {
+      return sum + (Number(f.cost) || 0);
+    }
+    return sum;
+  }, 0);
   if (document.getElementById('stat-fuel-cost')) document.getElementById('stat-fuel-cost').textContent = fmtPKR(monthlyFuelCost);
   
   const pendingMaintenance = state.maintenance.filter(m => m.status === 'Pending').length;
@@ -3732,6 +3961,48 @@ function exportAppData() {
   showToast('Backup file downloaded successfully! 📥', 'success');
 }
 
+function importAppData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      const vCount = (parsed.vehicles || []).length;
+      const fCount = (parsed.fuel || []).length;
+      const bCount = (parsed.bills || []).length;
+      const mCount = (parsed.maintenance || []).length;
+
+      if (!parsed.vehicles) {
+        showToast('Invalid backup file — vehicles data not found ❌', 'error');
+        return;
+      }
+
+      const confirmed = confirm(
+        `📦 Backup File Found!\n\n` +
+        `🚗 Vehicles: ${vCount}\n` +
+        `⛽ Fuel Records: ${fCount}\n` +
+        `🧾 Bills: ${bCount}\n` +
+        `🔧 Maintenance: ${mCount}\n\n` +
+        `⚠️ This will REPLACE your current data.\nAre you sure you want to restore?`
+      );
+
+      if (confirmed) {
+        state = parsed;
+        localStorage.setItem('vehiclehub_v5', JSON.stringify(state));
+        showToast(`Data restored! ${vCount} vehicles loaded ✅`, 'success');
+        setTimeout(() => location.reload(), 1500);
+      }
+    } catch(err) {
+      showToast('Error reading file. Make sure it is a valid VehicleHub backup JSON ❌', 'error');
+    }
+  };
+  reader.readAsText(file);
+  // Reset the input so the same file can be selected again if needed
+  event.target.value = '';
+}
+
 function exportToExcel() {
   try {
     const c = (val) => {
@@ -4065,3 +4336,4768 @@ document.getElementById('billPaidAmount')?.addEventListener('input', function() 
 
 
 
+
+
+
+// AUTO-RECOVERY BLOCK ADDED BY AI
+(function autoRecover() {
+  const saved = localStorage.getItem('vehiclehub_v5');
+  let isEmpty = true;
+  try {
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.vehicles && parsed.vehicles.length > 0) {
+        isEmpty = false;
+      }
+    }
+  } catch(e) {}
+  
+  if (isEmpty) {
+    console.log("Auto-recovering data from August 27 backup...");
+    const recoveredData = {
+  "vehicles": [
+    {
+      "allotmentDate": "",
+      "chassis": "ZRE172R7068921",
+      "color": "White",
+      "dept": "general",
+      "designation": "GM",
+      "driver": "",
+      "empId": "",
+      "engine": "Q369710",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4ytx0iv4f",
+      "insurance": "insured",
+      "insuranceExpiry": "",
+      "name": "Toyota Grande",
+      "plate": "ARX-361",
+      "power": "1800 CC",
+      "status": "Active",
+      "tokenExpiryDate": "2027-06-30",
+      "tokenStartDate": "2026-07-01",
+      "tokenStatus": "Paid",
+      "type": "Car",
+      "year": "2024"
+    },
+    {
+      "chassis": "NZE170R-4135350",
+      "color": "Phantan Brown",
+      "dept": "general",
+      "designation": "Admin Manager",
+      "driver": "mreuj4yt2hjydp",
+      "engine": "Z509585",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4ytgekdtv",
+      "insurance": "insured",
+      "name": "Toyota Grande",
+      "plate": "AEE-863",
+      "power": "1800 CC",
+      "status": "Active",
+      "tokenExpiryDate": "2027-06-30",
+      "tokenStartDate": "2026-07-01",
+      "tokenStatus": "Paid",
+      "type": "Car",
+      "year": 2017
+    },
+    {
+      "chassis": "ZRE172R-7023104",
+      "color": "White",
+      "dept": "general",
+      "designation": "Advisor",
+      "driver": "mreuj4yt4d7p66",
+      "engine": "Q324008",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4ytf7uzpy",
+      "insurance": "insured",
+      "name": "Toyota GLI",
+      "plate": "AFX-196",
+      "power": "1300 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2017
+    },
+    {
+      "chassis": "203974",
+      "color": "White",
+      "dept": "general",
+      "designation": "SCM Manager",
+      "driver": "mreuj4ytfuum2a",
+      "engine": "1021311",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yt5dchkg",
+      "insurance": "insured",
+      "name": "Suzuki Swift",
+      "plate": "ATG-620",
+      "power": "1200CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2024
+    },
+    {
+      "chassis": "NF1SZC63S00209449",
+      "color": "White",
+      "dept": "general",
+      "designation": "Accounts Manager",
+      "driver": "mreuj4ytm59lb0",
+      "engine": "K12MR1026794",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4yt830r5u",
+      "insurance": "insured",
+      "name": "Suzuki Swift",
+      "plate": "AVD-597",
+      "power": "1200CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2025
+    },
+    {
+      "chassis": "NF1SZC63500210884",
+      "color": "White",
+      "dept": "general",
+      "designation": "Operation Manager",
+      "driver": "mreuj4ytrvh3ow",
+      "engine": "K12MR1028201",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4ytbsf10v",
+      "insurance": "insured",
+      "name": "Suzuki Swift",
+      "plate": "AWM-981",
+      "power": "1200CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2025
+    },
+    {
+      "chassis": "A1J310PK10147415",
+      "color": "White",
+      "dept": "general",
+      "designation": "Pre-Press Manager",
+      "driver": "mreuj4yt03yefj",
+      "engine": "BK10B247435",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4ytz3zoyf",
+      "insurance": "insured",
+      "name": "Suzuki Wagon-R",
+      "plate": "ARQ-965",
+      "power": "1000 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2024
+    },
+    {
+      "chassis": "NF1AVK31H10026695",
+      "color": "White",
+      "dept": "general",
+      "designation": "Maintenance & Project Manager",
+      "driver": "mreuj4ytruiaq7",
+      "engine": "PK10K126706",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4ytv244fy",
+      "insurance": "insured",
+      "name": "Suzuki Cultus",
+      "plate": "LEB-1197",
+      "power": "1000 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2018
+    },
+    {
+      "chassis": "NF1ADE17V00104066",
+      "color": "White",
+      "dept": "general",
+      "designation": "Executive",
+      "driver": "mreuj4yt089ndz",
+      "engine": "R06AR1004065",
+      "envTag": false,
+      "etag": false,
+      "id": "mreuj4yucrukur",
+      "insurance": "insured",
+      "name": "Suzuki Every",
+      "plate": "AVX-481",
+      "power": "660 CC",
+      "status": "Active",
+      "type": "Van",
+      "year": 2025
+    },
+    {
+      "chassis": "ZRE171R6092228",
+      "color": "White",
+      "dept": "sale",
+      "designation": "National Sale Manager",
+      "driver": "mreuj4ytn8y6h2",
+      "engine": "Q114679",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4yutbqlyw",
+      "insurance": "insured",
+      "name": "Toyota Grande",
+      "plate": "BSD-020",
+      "power": "1600CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2026
+    },
+    {
+      "chassis": "ZRE171R-6027513",
+      "color": "White",
+      "dept": "sale",
+      "designation": "Export Sale Manager",
+      "driver": "mreuj4yt4meman",
+      "engine": "1ZR-FE1598",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yu6ounsf",
+      "insurance": "insured",
+      "name": "Toyota Grande",
+      "plate": "LEA-2850",
+      "power": "1600CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2018
+    },
+    {
+      "chassis": "NF1AVK31H10110064",
+      "color": "White",
+      "dept": "sale",
+      "designation": "Asst. Area Sale Manager",
+      "driver": "mreuj4ytbh2zi5",
+      "engine": "PK10K210082",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4yuain0vs",
+      "insurance": "insured",
+      "name": "Suzuki Cultus",
+      "plate": "ART-528",
+      "power": "1000 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2024
+    },
+    {
+      "chassis": "NF1AVK31H10110044",
+      "color": "White",
+      "dept": "sale",
+      "designation": "Area Sale Manager",
+      "driver": "mreuj4ytee3c7u",
+      "engine": "PK10K210061",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4yuvx1w8p",
+      "insurance": "insured",
+      "name": "Suzuki Cultus",
+      "plate": "ART-547",
+      "power": "1000 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2024
+    },
+    {
+      "chassis": "NF1AVK31H10025584",
+      "color": "White",
+      "dept": "sale",
+      "designation": "Area Sale Manager",
+      "driver": "mreuj4ytie3ggy",
+      "engine": "PK10K125604",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4yusjomrx",
+      "insurance": "insured",
+      "name": "Suzuki Cultus",
+      "plate": "LEB-1204",
+      "power": "1000 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2018
+    },
+    {
+      "chassis": "A1J310PK10147408",
+      "color": "White",
+      "dept": "sale",
+      "designation": "Sale Team Pool Vehicle",
+      "driver": "mreuj4ytntv99w",
+      "engine": "PK10B247425",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4yu48di13",
+      "insurance": "insured",
+      "name": "Suzuki Wagon-R",
+      "plate": "ARQ-526",
+      "power": "1000 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2024
+    },
+    {
+      "chassis": "A1J310PK10147416",
+      "color": "White",
+      "dept": "sale",
+      "designation": "Sale Team Pool Vehicle",
+      "driver": "mreuj4ytntv99w",
+      "engine": "BK10B247443",
+      "envTag": true,
+      "etag": true,
+      "id": "mreuj4yucuxjag",
+      "insurance": "insured",
+      "name": "Suzuki Wagon-R",
+      "plate": "ARQ-334",
+      "power": "1000 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2024
+    },
+    {
+      "chassis": "NZE170R-4097717",
+      "color": "White",
+      "dept": "admin",
+      "designation": "Admin (company Pool Vehicle)",
+      "driver": "mreuj4yt6zw0sb",
+      "engine": "Z471575",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yuqho4wy",
+      "insurance": "insured",
+      "name": "Toyota GLI",
+      "plate": "LEA-6860",
+      "power": "1300 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2016
+    },
+    {
+      "chassis": "NSP150R7001654",
+      "color": "White",
+      "dept": "admin",
+      "designation": "Admin (company Pool Vehicle)",
+      "driver": "mreuj4yt6zw0sb",
+      "engine": "2A03272",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yubwheg3",
+      "insurance": "insured",
+      "name": "Toyota Yaris",
+      "plate": "LEB-5449",
+      "power": "1300 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2020
+    },
+    {
+      "chassis": "KPS1302096955",
+      "color": "Sky Blue",
+      "dept": "admin",
+      "designation": "Admin (company Pool Vehicle)",
+      "driver": "mreuj4yt6zw0sb",
+      "engine": "IKR1430064",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yu59d0rg",
+      "insurance": "insured",
+      "name": "Toyota Vitz",
+      "plate": "LE-3153",
+      "power": "1000 CC",
+      "status": "Active",
+      "type": "Car",
+      "year": 2017
+    },
+    {
+      "chassis": "SV308PK01132851",
+      "color": "White",
+      "dept": "admin",
+      "designation": "Admin (company Pool Vehicle)",
+      "driver": "mreuj4yt6zw0sb",
+      "engine": "PKT1016339",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yua1y8vk",
+      "insurance": "insured",
+      "name": "Suzuki Bolan",
+      "plate": "AFS-612",
+      "power": "800 CC",
+      "status": "Active",
+      "type": "Van",
+      "year": 2021
+    },
+    {
+      "chassis": "NKMAAB3R3S1001588",
+      "color": "White",
+      "dept": "admin",
+      "designation": "Admin (company Pool Vehicle)",
+      "driver": "mreuj4yt6zw0sb",
+      "engine": "JL473QS30C508312",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yutdge2x",
+      "insurance": "insured",
+      "name": "Changan Carwan",
+      "plate": "BPR-980",
+      "power": "1200 CC",
+      "status": "Active",
+      "type": "Van",
+      "year": 2026
+    },
+    {
+      "chassis": "SR308PK488376",
+      "color": "White",
+      "dept": "admin",
+      "designation": "For Company Use",
+      "driver": "mreuj4yt0xkc78",
+      "engine": "PKT383713",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yuivr7pq",
+      "insurance": "insured",
+      "name": "Suzuki Ravi",
+      "plate": "CAJ-6701",
+      "power": "850 CC",
+      "status": "Active",
+      "type": "Truck",
+      "year": 2022
+    },
+    {
+      "chassis": "PMFZBX7BLRN108171",
+      "color": "White",
+      "dept": "admin",
+      "designation": "For Company Use",
+      "driver": "mreuj4yt0xkc78",
+      "engine": "D4BBR014905",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yu1xg77h",
+      "insurance": "insured",
+      "name": "Hyundai Porter",
+      "plate": "CAV-8213",
+      "power": "2600 CC",
+      "status": "Active",
+      "type": "Truck",
+      "year": 2025
+    },
+    {
+      "chassis": "PMFZBX7BLMN101385",
+      "color": "White",
+      "dept": "admin",
+      "designation": "For Company Use",
+      "driver": "mreuj4yt0xkc78",
+      "engine": "D4BBM001318",
+      "envTag": false,
+      "etag": true,
+      "id": "mreuj4yuxxy249",
+      "insurance": "insured",
+      "name": "Hyundai Porter",
+      "plate": "CAF-4893",
+      "power": "2600 CC",
+      "status": "Active",
+      "type": "Truck",
+      "year": 2021
+    },
+    {
+      "allotmentDate": "",
+      "chassis": "JHHY JLOHX02003240",
+      "color": "White",
+      "dept": "admin",
+      "designation": "For Company Use",
+      "driver": "mreuj4yt0xkc78",
+      "empId": "",
+      "engine": "WO4D TNM14157",
+      "envTag": false,
+      "etag": false,
+      "id": "mreuj4yub8k04e",
+      "insurance": "insured",
+      "insuranceExpiry": "",
+      "name": "Hino",
+      "plate": "LES-4605",
+      "power": "4000 CC",
+      "status": "Active",
+      "type": "Truck",
+      "year": "2019"
+    },
+    {
+      "chassis": "ED006457",
+      "color": "Red",
+      "dept": "scm",
+      "driver": "",
+      "driverName": "shahyar SCM",
+      "engine": "Z324266",
+      "id": "mrew9z0wk6ys1z",
+      "name": "Honda  CG-125",
+      "plate": "AXG-8974",
+      "status": "Active",
+      "type": "Motorcycle",
+      "year": "2024"
+    },
+    {
+      "chassis": "GS150PK30091274",
+      "color": "Black",
+      "dept": "scm",
+      "driver": "",
+      "driverName": "Usman Yaqoob",
+      "engine": "PKG30091274",
+      "id": "mrewbhpllwle4b",
+      "name": "Suzuki GS-150",
+      "plate": "AVH-6061",
+      "status": "Active",
+      "type": "Motorcycle",
+      "year": "2024"
+    },
+    {
+      "chassis": "",
+      "color": "Red",
+      "dept": "admin",
+      "driver": "",
+      "driverName": "Colony",
+      "engine": "",
+      "id": "mrewchyed3g38v",
+      "name": "honda CD-70",
+      "plate": "LEL-9190",
+      "status": "Active",
+      "type": "Motorcycle",
+      "year": "2019"
+    },
+    {
+      "chassis": "JF456004",
+      "color": "Red",
+      "dept": "admin",
+      "driver": "",
+      "driverName": "Shahbaz",
+      "engine": "P666047",
+      "id": "mrewk5ukzzct0t",
+      "name": "Honda CD-70",
+      "plate": "AXF-2378",
+      "status": "Active",
+      "type": "Motorcycle",
+      "year": "2025"
+    },
+    {
+      "chassis": "GH810113",
+      "color": "Red",
+      "dept": "admin",
+      "driver": "",
+      "driverName": "Main Gate",
+      "engine": "D997621",
+      "id": "mrewl8e897psj6",
+      "name": "Honda CD-70",
+      "plate": "AKN-8859",
+      "status": "Active",
+      "type": "Motorcycle",
+      "year": "2022"
+    },
+    {
+      "chassis": "EB942544",
+      "color": "Red",
+      "dept": "admin",
+      "driver": "",
+      "driverName": "Civil man",
+      "engine": "T257357",
+      "id": "mrewmgkol01tc6",
+      "name": "Honda CG-125",
+      "plate": "AHL-7618",
+      "status": "Active",
+      "type": "Motorcycle",
+      "year": "2021"
+    },
+    {
+      "chassis": "",
+      "color": "Red",
+      "dept": "accounts",
+      "driver": "",
+      "driverName": "Mutti Ur Rehman",
+      "engine": "",
+      "id": "mrewoloelgv3w5",
+      "name": "Honda CD-70",
+      "plate": "BCV-3278",
+      "status": "Active",
+      "type": "Motorcycle",
+      "year": "2025"
+    }
+  ],
+  "drivers": [
+    {
+      "address": "Sekhupur",
+      "empId": "163844",
+      "id": "mreuj4ytcptuqn",
+      "license": "85491-95",
+      "licenseExpiry": "2030-07-07",
+      "name": "Muhammad Ashfaq",
+      "phone": "03410011117",
+      "type": "Company"
+    },
+    {
+      "address": "Khushab  Qaidabad",
+      "empId": "2034243",
+      "id": "mreuj4ytee3c7u",
+      "license": "KB-22-476",
+      "licenseExpiry": "2027-11-24",
+      "name": "Hafiz Usama Noor",
+      "phone": "0300 7663141",
+      "type": "Company"
+    },
+    {
+      "address": "Kote Radha Kission",
+      "empId": "2030809",
+      "id": "mreuj4ytie3ggy",
+      "license": "—",
+      "licenseExpiry": "2027-03-02",
+      "name": "Saeed Muhammad",
+      "phone": "03410011119",
+      "type": "Company"
+    },
+    {
+      "address": "Raiwind",
+      "empId": "2033021",
+      "id": "mreuj4ytntv99w",
+      "license": "—",
+      "licenseExpiry": "2029-03-02",
+      "name": "Muhammad Zubair",
+      "phone": "03410011313",
+      "type": "Company"
+    },
+    {
+      "address": "Serghuda",
+      "empId": "2041849",
+      "id": "mreuj4yt6zw0sb",
+      "license": "—",
+      "licenseExpiry": "2028-01-02",
+      "name": "Muhammad Masood Nawaz",
+      "phone": "03020663715",
+      "type": "Company"
+    },
+    {
+      "address": "tehsil Sahiwal , distract  Sargodha",
+      "empId": "2012047",
+      "id": "mreuj4yt0xkc78",
+      "license": "SA-20-6927",
+      "licenseExpiry": "2026-08-15",
+      "name": "Tanveer Abbas",
+      "phone": "0341 0111191",
+      "type": "Company"
+    }
+  ],
+  "maintenance": [
+    {
+      "cost": 8700,
+      "currentReading": "61500",
+      "date": "2026-07-10",
+      "driver": "mreuj4ytee3c7u",
+      "id": "mrew062fbx3jzw",
+      "nextReading": "66500",
+      "notes": "Engine Oil / Oil Filter / Air Filter / AC filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "mreuj4yuvx1w8p",
+      "vendor": "Makki Oil  Satore",
+      "vendorAddress": "Opposite DHA Rhaber"
+    },
+    {
+      "cost": 7590,
+      "currentReading": "166000",
+      "date": "2026-08-01",
+      "driver": "mreuj4ytie3ggy",
+      "id": "mscsj33ud6oh9j",
+      "nextReading": "170000",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "mreuj4yubwheg3",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "cost": 10471,
+      "currentReading": "25170",
+      "date": "2026-08-04",
+      "driver": "mreuj4ytee3c7u",
+      "id": "msfp73bmlocv2y",
+      "nextReading": "30170",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "mreuj4yu1xg77h",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "cost": 8310,
+      "currentReading": "39780",
+      "date": "2026-08-04",
+      "driver": "mreuj4yt6zw0sb",
+      "id": "msfp9sd3hui671",
+      "nextReading": "44780",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "mreuj4yt5dchkg",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "cost": 1000,
+      "currentReading": "40000",
+      "date": "2026-08-04",
+      "driver": "mreuj4yt6zw0sb",
+      "id": "msfpfgaqmg35mp",
+      "nextReading": "80000",
+      "notes": "Tyre Replace Labour",
+      "status": "Completed",
+      "type": "Tyre Replacement",
+      "vehicle": "mreuj4yt5dchkg",
+      "vendor": "Haroon Tyre Shop",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "cost": 1200,
+      "currentReading": "",
+      "date": "2026-08-04",
+      "driver": "mreuj4yt6zw0sb",
+      "id": "msfpkgh83zzpbq",
+      "nextReading": "",
+      "notes": "Wheel Alignment /  Wheel Balancing Labour",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "mreuj4yt5dchkg",
+      "vendor": "Shahzad Wheel Alignment Shop",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "cost": 250,
+      "currentReading": "",
+      "date": "2026-08-04",
+      "driver": "mreuj4ytie3ggy",
+      "id": "msfpyhhcfuuh62",
+      "nextReading": "",
+      "notes": "Tyre Puncture Labour",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "mrewl8e897psj6",
+      "vendor": "EURO PP2 Shop",
+      "vendorAddress": "Sundar Estate"
+    },
+    {
+      "cost": 6000,
+      "currentReading": "",
+      "date": "2026-08-06",
+      "driver": "Muhammad Ashfaq",
+      "id": "msh349zs66vqdy",
+      "nextReading": "",
+      "notes": "Payment Deposite For Account (Old Tyre Sale)",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Suzuki Wagon-R (ARQ-526)",
+      "vendor": "Shahzad Wheel Alignment Shop",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "cost": 2000,
+      "currentReading": "40000",
+      "date": "2026-08-06",
+      "driver": "Muhammad Ashfaq",
+      "id": "msh3815o8nsi78",
+      "nextReading": "80000",
+      "notes": "Wheel Alignment / Wheel Balancing / Tyre Change Labour",
+      "status": "Completed",
+      "type": "Tyre Replacement",
+      "vehicle": "Suzuki Wagon-R (ARQ-526)",
+      "vendor": "Shahzad Wheel Alignment Shop",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "cost": 2100,
+      "currentReading": "",
+      "date": "2026-08-06",
+      "driver": "Tanveer Abbas",
+      "id": "mshe420sofpiao",
+      "nextReading": "",
+      "notes": "Cultch Kit (Qty. 2) , Cultch Labour",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "Sufain Auto Store",
+      "vendorAddress": "Raiwind Road Lahore"
+    },
+    {
+      "cost": 600,
+      "currentReading": "",
+      "date": "2026-08-08",
+      "driver": "Muhammad Masood Nawaz",
+      "id": "msk650e01nx5wx",
+      "nextReading": "",
+      "notes": "Tyre Puncture (300*2) = 600",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Suzuki Every (AVX-481)",
+      "vendor": "Shahzad Tyre Shop",
+      "vendorAddress": "PSO Pump Sundar Estate"
+    },
+    {
+      "cost": 1660,
+      "currentReading": "",
+      "date": "2026-08-08",
+      "driver": "Muhammad Zubair",
+      "id": "msk6a4l7v2dipo",
+      "nextReading": "",
+      "notes": "Engine Oil, Tuning, Filter, Dumchi & Rubber",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "Honda CD-70 (BCV-3278)",
+      "vendor": "Rafique Autos",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "cost": 700,
+      "currentReading": "",
+      "date": "2026-08-08",
+      "driver": "Muhammad Ashfaq",
+      "id": "msmskwx35za4dy",
+      "nextReading": "",
+      "notes": "Air Filter",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Hyundai Porter (CAV-8213)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "cost": 7900,
+      "currentReading": "63500",
+      "date": "2026-08-08",
+      "driver": "Muhammad Ashfaq",
+      "id": "msmsp41w7mee27",
+      "nextReading": "68500",
+      "notes": "Engine Oil / Oil Filter / Air Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "Suzuki Wagon-R (ARQ-334)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "cost": 12128,
+      "currentReading": "91100",
+      "date": "2026-08-10",
+      "driver": "Muhammad Ashfaq",
+      "id": "mso8r21lxadgpw",
+      "nextReading": "96100",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "Toyota Grande (ARX-361)",
+      "vendor": "Makki  Oil Store",
+      "vendorAddress": "Opposite DHA  Rahbar"
+    },
+    {
+      "cost": 1800,
+      "currentReading": "",
+      "date": "2026-08-10",
+      "driver": "Hafiz Usama Noor",
+      "id": "mso8zba4bh3yes",
+      "nextReading": "",
+      "notes": "Power Window Switch Repair",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Suzuki Wagon-R (ARQ-965)",
+      "vendor": "New Daisun Auto Store",
+      "vendorAddress": "Lahore"
+    },
+    {
+      "cost": 2100,
+      "currentReading": "",
+      "date": "2026-08-10",
+      "driver": "Muhammad Masood Nawaz",
+      "id": "mso94ocfve2c38",
+      "nextReading": "",
+      "notes": "One Puncture (300), Tyre Cut Pice (600*3=1800)",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Changan Carwan (BPR-980)",
+      "vendor": "Euro PP2",
+      "vendorAddress": "Sundar Estate"
+    },
+    {
+      "cost": 200,
+      "currentReading": "",
+      "date": "2026-08-10",
+      "driver": "Azam",
+      "id": "mso97mthhc31hn",
+      "nextReading": "",
+      "notes": "Bike Tyre  Puncture (100-2=200)",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "honda CD-70 (LEL-9190)",
+      "vendor": "Euro PP2",
+      "vendorAddress": "Sundar Estate"
+    },
+    {
+      "cost": 7000,
+      "currentReading": "",
+      "date": "2026-08-12",
+      "driver": "Muhammad Ashfaq",
+      "id": "mspwopl4bx7s64",
+      "nextReading": "",
+      "notes": "Remote Repair (001535634)(G)Boot.",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Toyota GLI (AFX-196)",
+      "vendor": "Madina Lock Master",
+      "vendorAddress": "LAHORE"
+    },
+    {
+      "cost": 2015,
+      "currentReading": "",
+      "date": "2026-08-11",
+      "driver": "Muhammad Masood Nawaz",
+      "id": "mspwsdr9nz41op",
+      "nextReading": "",
+      "notes": "Traffic Challan",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Hyundai Porter (CAV-8213)",
+      "vendor": "Easypaisa",
+      "vendorAddress": "Online"
+    },
+    {
+      "cost": 8250,
+      "currentReading": "41000",
+      "date": "2026-08-13",
+      "driver": "Hafiz Usama Noor",
+      "id": "msrcyoli6uysvn",
+      "nextReading": "46000",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "Suzuki Wagon-R (ARQ-526)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "cost": 9550,
+      "currentReading": "28000",
+      "date": "2026-08-13",
+      "driver": "Muhammad Masood Nawaz",
+      "id": "msrd0cfnsi8gr4",
+      "nextReading": "33000",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "Suzuki Swift (AWM-981)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "cost": 14350,
+      "currentReading": "45480",
+      "date": "2026-08-16",
+      "driver": "Muhammad Ashfaq",
+      "id": "mswvin1bluaqir",
+      "nextReading": "49480",
+      "notes": "Engine Oil / Oil Filter / Air Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "EF-55",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "cost": 1600,
+      "currentReading": "",
+      "date": "2026-08-18",
+      "driver": "Tanveer Abbas",
+      "id": "mt1b7f7d4z3wdz",
+      "nextReading": "",
+      "notes": "Vehicle Grease / Tyre Air Filling / Cleaning Air Filter / Radiator Cleaning",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "Shahzad TyreShop",
+      "vendorAddress": "Raiwind Road Lahore"
+    },
+    {
+      "cost": 800,
+      "currentReading": "",
+      "date": "2026-08-21",
+      "driver": "Tanveer Abbas",
+      "id": "mt2l1ce0lw9dol",
+      "nextReading": "",
+      "notes": "Tyre Puncture (Cut Pice)",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "Hyundai Porter (CAF-4893)",
+      "vendor": "Mian Tyre Shop",
+      "vendorAddress": "Sunder Estate"
+    },
+    {
+      "cost": 6855,
+      "currentReading": "324360",
+      "date": "2026-08-22",
+      "driver": "Hafiz Usama Noor",
+      "id": "mt72pfaf02v4o0",
+      "nextReading": "328360",
+      "notes": "Engine Oil / Air Filter / Oil Filter Change",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "Toyota GLI (LEA-6860)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rhabar"
+    },
+    {
+      "cost": 34842,
+      "currentReading": "231366",
+      "date": "2026-08-24",
+      "driver": "Tanveer Abbas",
+      "id": "mt83r4rmvmgtr1",
+      "nextReading": "235366",
+      "notes": "Engine Oil / Kerosene Oil / Vehicle Grease / Oil Filter / Brake Washer / Hino Coolant (4 L) / Wheel Greasing Labour / Labour",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "Lahore Central Motors (Pvt) Limited",
+      "vendorAddress": "19 KM Multan Road , Lahore"
+    },
+    {
+      "cost": 11161,
+      "currentReading": "184900",
+      "date": "2026-08-24",
+      "driver": "Saeed Muhammad",
+      "id": "mt84czt8a3p4m0",
+      "nextReading": "188900",
+      "notes": "Engine Oil / Oil Filter / Air Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "Hyundai Porter (CAF-4893)",
+      "vendor": "Makki Oil  Store",
+      "vendorAddress": "opposite DHA Rhabar"
+    },
+    {
+      "cost": 7650,
+      "currentReading": "252200",
+      "date": "2026-08-24",
+      "driver": "Muhammad Ashfaq",
+      "id": "mt84k7r96oakcf",
+      "nextReading": "256200",
+      "notes": "Engine Oil / Oil Filter / Air Filter",
+      "status": "Completed",
+      "type": "Oil Change",
+      "vehicle": "Suzuki Cultus (LEB-1197)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "cost": 1500,
+      "currentReading": "",
+      "date": "2026-08-25",
+      "driver": "Muhammad Ashfaq",
+      "id": "mt84mjyyrrze1j",
+      "nextReading": "",
+      "notes": "Silicon , Rubbar , Labour",
+      "status": "Completed",
+      "type": "Other",
+      "vehicle": "EF-55",
+      "vendor": "AL- FLAH MOTORS",
+      "vendorAddress": "Raiwind"
+    }
+  ],
+  "fuel": [
+    {
+      "batchId": "msct8k5fyl02el",
+      "cost": 24140,
+      "date": "2026-08-03",
+      "driver": "mreuj4yt0xkc78",
+      "fuelAverage": "First",
+      "fuelType": "DIESEL",
+      "id": "msct8k5fmcdxe3",
+      "litres": 61.25,
+      "odometer": 230142,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 394.13,
+      "vehicle": "mreuj4yub8k04e"
+    },
+    {
+      "batchId": "msct8k5fyl02el",
+      "cost": 12600,
+      "date": "2026-08-03",
+      "driver": "mreuj4ytntv99w",
+      "fuelAverage": "First",
+      "fuelType": "DIESEL",
+      "id": "msct8k5fdtxnbu",
+      "litres": 31.97,
+      "odometer": 25058,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 394.13,
+      "vehicle": "mreuj4yu1xg77h"
+    },
+    {
+      "batchId": "msct8k5fyl02el",
+      "cost": 7950,
+      "date": "2026-08-03",
+      "driver": "mreuj4ytee3c7u",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msct8k5fqzn40x",
+      "litres": 23.54,
+      "odometer": 324183,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 337.78,
+      "vehicle": "mreuj4yuqho4wy"
+    },
+    {
+      "batchId": "msct8k5fyl02el",
+      "cost": 12000,
+      "date": "2026-08-03",
+      "driver": "mreuj4yt6zw0sb",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msct8k5fy1bmc0",
+      "litres": 35.53,
+      "odometer": 10880,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 337.78,
+      "vehicle": "mreuj4yutdge2x"
+    },
+    {
+      "batchId": "msct8k5fyl02el",
+      "cost": 5500,
+      "date": "2026-08-03",
+      "driver": "mreuj4ytcptuqn",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msct8k5fxvkpah",
+      "litres": 16.28,
+      "odometer": 166063,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 337.78,
+      "vehicle": "mreuj4yubwheg3"
+    },
+    {
+      "batchId": "msctld9sxa09gp",
+      "cost": 6800,
+      "date": "2026-08-03",
+      "driver": "mreuj4ytie3ggy",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msctld9s28duyf",
+      "litres": 20.13,
+      "odometer": 63199,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 337.78,
+      "vehicle": "mreuj4yucuxjag"
+    },
+    {
+      "batchId": "msfoxocmupjmon",
+      "cost": 19000,
+      "date": "2026-08-05",
+      "driver": "mreuj4ytntv99w",
+      "fuelAverage": "First",
+      "fuelType": "DIESEL",
+      "id": "msfoxocm63uygv",
+      "litres": 49.02,
+      "odometer": 182899,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 387.61,
+      "vehicle": "mreuj4yuxxy249"
+    },
+    {
+      "batchId": "msfoxocmupjmon",
+      "cost": 12830,
+      "date": "2026-08-05",
+      "driver": "mreuj4ytie3ggy",
+      "fuelAverage": "6.86 km/L",
+      "fuelType": "DIESEL",
+      "id": "msfoxocmywdl4n",
+      "litres": 33.1,
+      "odometer": 25285,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 387.61,
+      "vehicle": "mreuj4yu1xg77h"
+    },
+    {
+      "batchId": "msfoxocmupjmon",
+      "cost": 7720,
+      "date": "2026-08-05",
+      "driver": "mreuj4yt6zw0sb",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msfoxocm9u0wdi",
+      "litres": 23.37,
+      "odometer": 62974,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 330.31,
+      "vehicle": "mreuj4yuivr7pq"
+    },
+    {
+      "batchId": "msfoxocmupjmon",
+      "cost": 6000,
+      "date": "2026-08-05",
+      "driver": "mreuj4ytee3c7u",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msfoxocmjdzoef",
+      "litres": 18.16,
+      "odometer": 85215,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 330.31,
+      "vehicle": "mreuj4yua1y8vk"
+    },
+    {
+      "batchId": "msfqc9n0j3jpwc",
+      "cost": 5500,
+      "date": "2026-08-04",
+      "driver": "mreuj4ytee3c7u",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msfqc9n1ybjg3g",
+      "litres": 16.48,
+      "odometer": 40647,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 333.7,
+      "vehicle": "mreuj4yu48di13"
+    },
+    {
+      "batchId": "msfqg6ixfv9k3w",
+      "cost": 10520,
+      "date": "2026-08-04",
+      "driver": "mreuj4yt6zw0sb",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msfqg6ixsbgr5z",
+      "litres": 31.52,
+      "odometer": 36983,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 333.7,
+      "vehicle": "mreuj4yucrukur"
+    },
+    {
+      "batchId": "msfqg6ixfv9k3w",
+      "cost": 1000,
+      "date": "2026-08-05",
+      "driver": "mreuj4ytntv99w",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msfqg6ix6n1xhd",
+      "litres": 2.99,
+      "odometer": 1,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 332.78,
+      "vehicle": "mrewl8e897psj6"
+    },
+    {
+      "batchId": "msh1tcxemf8lym",
+      "cost": 2650,
+      "date": "2026-08-06",
+      "driver": "Saeed Muhammad",
+      "fuelAverage": "15.78 km/L",
+      "fuelType": "PETROL",
+      "id": "msh1tcxe24yq2b",
+      "litres": 7.92,
+      "odometer": 63324,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 334.76,
+      "vehicle": "Suzuki Wagon-R (ARQ-334)"
+    },
+    {
+      "batchId": "msh1tcxemf8lym",
+      "cost": 3400,
+      "date": "2026-08-06",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "—",
+      "fuelType": "PETROL",
+      "id": "msh1tcxefbj30m",
+      "litres": 10.16,
+      "odometer": 40368,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 334.76,
+      "vehicle": "Suzuki Wagon-R (ARQ-526)"
+    },
+    {
+      "batchId": "msh1p1moxo5agp",
+      "cost": 22300,
+      "date": "2026-08-06",
+      "driver": "Tanveer Abbas",
+      "fuelAverage": "6.21 km/L",
+      "fuelType": "DIESEL",
+      "id": "msh287ny1dsljb",
+      "litres": 57.83,
+      "odometer": 230501,
+      "pumpName": "",
+      "rate": 385.61,
+      "vehicle": "Hino (LES-4605)"
+    },
+    {
+      "batchId": "msh1p1moxo5agp",
+      "cost": 15030,
+      "date": "2026-08-06",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "9.40 km/L",
+      "fuelType": "PETROL",
+      "id": "msh287nyzrj0no",
+      "litres": 44.9,
+      "odometer": 11302,
+      "pumpName": "",
+      "rate": 334.76,
+      "vehicle": "Changan Carwan (BPR-980)"
+    },
+    {
+      "batchId": "msh1p1moxo5agp",
+      "cost": 8300,
+      "date": "2026-08-06",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "10.33 km/L",
+      "fuelType": "PETROL",
+      "id": "msh287ny78k0ki",
+      "litres": 24.79,
+      "odometer": 166319,
+      "pumpName": "",
+      "rate": 334.76,
+      "vehicle": "Toyota Yaris (LEB-5449)"
+    },
+    {
+      "batchId": "msh1p1moxo5agp",
+      "cost": 2000,
+      "date": "2026-08-06",
+      "driver": "shahbaz",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msh287nyjbhy0i",
+      "litres": 5.96,
+      "odometer": 1,
+      "pumpName": "",
+      "rate": 335.41,
+      "vehicle": "Honda CD-70 (AXF-2378)"
+    },
+    {
+      "batchId": "msk5y9mf4tc4f2",
+      "cost": 20910,
+      "date": "2026-08-08",
+      "driver": "Saeed Muhammad",
+      "fuelAverage": "7.94 km/L",
+      "fuelType": "DIESEL",
+      "id": "msk5y9mfar5rno",
+      "litres": 54.64,
+      "odometer": 183333,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 382.67,
+      "vehicle": "Hyundai Porter (CAF-4893)"
+    },
+    {
+      "batchId": "msk5y9mf4tc4f2",
+      "cost": 9180,
+      "date": "2026-08-08",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "11.34 km/L",
+      "fuelType": "PETROL",
+      "id": "msk5y9mfdzp1ws",
+      "litres": 27.87,
+      "odometer": 37299,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 329.43,
+      "vehicle": "Suzuki Every (AVX-481)"
+    },
+    {
+      "batchId": "msk5y9mf4tc4f2",
+      "cost": 6500,
+      "date": "2026-08-08",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "7.81 km/L",
+      "fuelType": "PETROL",
+      "id": "msk5y9mfp59tzc",
+      "litres": 19.73,
+      "odometer": 63128,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 329.43,
+      "vehicle": "Suzuki Ravi (CAJ-6701)"
+    },
+    {
+      "batchId": "msmszm3ilha2qq",
+      "cost": 12000,
+      "date": "2026-08-10",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "11.17 km/L",
+      "fuelType": "PETROL",
+      "id": "msmszm3im6am1b",
+      "litres": 36.43,
+      "odometer": 11709,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 329.43,
+      "vehicle": "Changan Carwan (BPR-980)"
+    },
+    {
+      "batchId": "msmszm3ilha2qq",
+      "cost": 1000,
+      "date": "2026-08-09",
+      "driver": "Azam",
+      "fuelAverage": "—",
+      "fuelType": "PETROL",
+      "id": "msmszm3jxq9kn7",
+      "litres": 3.03,
+      "odometer": 1,
+      "pumpName": "Euro Sundar Estate",
+      "rate": 330.02,
+      "vehicle": "Honda CD-70 (AKN-8859)"
+    },
+    {
+      "batchId": "mso9ixrakils31",
+      "cost": 19500,
+      "date": "2026-08-11",
+      "driver": "Tanveer Abbas",
+      "fuelAverage": "6.40 km/L",
+      "fuelType": "DIESEL",
+      "id": "mso9ixraahl69h",
+      "litres": 50.96,
+      "odometer": 230827,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 382.67,
+      "vehicle": "Hino (LES-4605)"
+    },
+    {
+      "batchId": "mso9ixrakils31",
+      "cost": 16500,
+      "date": "2026-08-11",
+      "driver": "Saeed Muhammad",
+      "fuelAverage": "9.04 km/L",
+      "fuelType": "DIESEL",
+      "id": "mso9ixraxzbv6f",
+      "litres": 43.12,
+      "odometer": 25675,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 382.67,
+      "vehicle": "Hyundai Porter (CAV-8213)"
+    },
+    {
+      "batchId": "mspx333x3ovu5d",
+      "cost": 17600,
+      "date": "2026-08-12",
+      "driver": "Saeed Muhammad",
+      "fuelAverage": "8.05 km/L",
+      "fuelType": "DIESEL",
+      "id": "mspx333x9vysts",
+      "litres": 45.83,
+      "odometer": 183702,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 384.06,
+      "vehicle": "Hyundai Porter (CAF-4893)"
+    },
+    {
+      "batchId": "mspx333x3ovu5d",
+      "cost": 6100,
+      "date": "2026-08-12",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "8.01 km/L",
+      "fuelType": "PETROL",
+      "id": "mspx333xq0hrxy",
+      "litres": 18.61,
+      "odometer": 166468,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 327.73,
+      "vehicle": "Toyota Yaris (LEB-5449)"
+    },
+    {
+      "batchId": "mspx333x3ovu5d",
+      "cost": 10460,
+      "date": "2026-08-12",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "8.99 km/L",
+      "fuelType": "PETROL",
+      "id": "mspx333xxwfkje",
+      "litres": 31.93,
+      "odometer": 11996,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 327.73,
+      "vehicle": "Changan Carwan (BPR-980)"
+    },
+    {
+      "batchId": "mspx333x3ovu5d",
+      "cost": 2000,
+      "date": "2026-08-12",
+      "driver": "Mutti Ur Rahman",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "mspx333xhy5mv4",
+      "litres": 6.06,
+      "odometer": 1,
+      "pumpName": "Euro Sundar Estate",
+      "rate": 330.02,
+      "vehicle": "Honda CD-70 (BCV-3278)"
+    },
+    {
+      "batchId": "mspx5iru0vinpk",
+      "cost": 5600,
+      "date": "2026-08-12",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "15.39 km/L",
+      "fuelType": "PETROL",
+      "id": "mspx5iru93tw8b",
+      "litres": 17.09,
+      "odometer": 63587,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 327.73,
+      "vehicle": "Suzuki Wagon-R (ARQ-334)"
+    },
+    {
+      "batchId": "msrcpu6m1m948f",
+      "cost": 20400,
+      "date": "2026-08-12",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msrcr5ibh0g0r1",
+      "litres": 57.46,
+      "odometer": 45110,
+      "pumpName": "",
+      "rate": 355,
+      "vehicle": "EF-55"
+    },
+    {
+      "batchId": "msrcpu6m1m948f",
+      "cost": 8800,
+      "date": "2026-08-13",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "19.64 km/L",
+      "fuelType": "PETROL",
+      "id": "msrcr5ib28bgov",
+      "litres": 26.93,
+      "odometer": 37828,
+      "pumpName": "",
+      "rate": 326.79,
+      "vehicle": "Suzuki Every (AVX-481)"
+    },
+    {
+      "batchId": "msrcpu6m1m948f",
+      "cost": 7620,
+      "date": "2026-08-13",
+      "driver": "Saeed Muhammad",
+      "fuelAverage": "13.04 km/L",
+      "fuelType": "PETROL",
+      "id": "msrcr5ib7zv8ru",
+      "litres": 23.32,
+      "odometer": 63432,
+      "pumpName": "",
+      "rate": 326.79,
+      "vehicle": "Suzuki Ravi (CAJ-6701)"
+    },
+    {
+      "batchId": "msrcpu6m1m948f",
+      "cost": 2000,
+      "date": "2026-08-12",
+      "driver": "sharza",
+      "fuelAverage": "—",
+      "fuelType": "PETROL",
+      "id": "msrcr5iblijmez",
+      "litres": 6.1,
+      "odometer": 1,
+      "pumpName": "",
+      "rate": 327.73,
+      "vehicle": "Honda CD-70 (AXF-2378)"
+    },
+    {
+      "batchId": "msrcpu6m1m948f",
+      "cost": 1000,
+      "date": "2026-08-12",
+      "driver": "Rubbani",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "msrcr5icbiv2ru",
+      "litres": 3.04,
+      "odometer": 1,
+      "pumpName": "",
+      "rate": 328.32,
+      "vehicle": "Honda CG-125 (AHL-7618)"
+    },
+    {
+      "batchId": "mswv39g8z1szuz",
+      "cost": 19000,
+      "date": "2026-08-17",
+      "driver": "Muhammad Zubair",
+      "fuelAverage": "7.65 km/L",
+      "fuelType": "DIESEL",
+      "id": "mswv39g8fsoomv",
+      "litres": 49.25,
+      "odometer": 184079,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 385.76,
+      "vehicle": "Hyundai Porter (CAF-4893)"
+    },
+    {
+      "batchId": "mswv39g8z1szuz",
+      "cost": 23000,
+      "date": "2026-08-16",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "6.73 km/L",
+      "fuelType": "PETROL",
+      "id": "mswv39g88ofg0j",
+      "litres": 64.79,
+      "odometer": 45546,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 355,
+      "vehicle": "EF-55"
+    },
+    {
+      "batchId": "mswv39g8z1szuz",
+      "cost": 13500,
+      "date": "2026-08-17",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "—",
+      "fuelType": "PETROL",
+      "id": "mswv39g8h49w3c",
+      "litres": 41.25,
+      "odometer": 12534,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 327.24,
+      "vehicle": "Changan Carwan (BPR-980)"
+    },
+    {
+      "batchId": "mswv39g8z1szuz",
+      "cost": 8220,
+      "date": "2026-08-17",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "14.54 km/L",
+      "fuelType": "PETROL",
+      "id": "mswv39g8lphhio",
+      "litres": 25.11,
+      "odometer": 38193,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 327.24,
+      "vehicle": "Suzuki Every (AVX-481)"
+    },
+    {
+      "batchId": "mswv9j5dpr2w9t",
+      "cost": 3000,
+      "date": "2026-08-15",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "58.80 km/L",
+      "fuelType": "PETROL",
+      "id": "mswv9j5ehedt8r",
+      "litres": 9.15,
+      "odometer": 12534,
+      "pumpName": "PSO Lahore",
+      "rate": 327.57,
+      "vehicle": "Changan Carwan (BPR-980)"
+    },
+    {
+      "batchId": "mswv9j5dpr2w9t",
+      "cost": 2000,
+      "date": "2026-08-13",
+      "driver": "Azam",
+      "fuelAverage": "—",
+      "fuelType": "PETROL",
+      "id": "mswv9j5e2kjo3a",
+      "litres": 6.1,
+      "odometer": 1,
+      "pumpName": "Euro Sundar Estate",
+      "rate": 327.38,
+      "vehicle": "Honda CD-70 (AKN-8859)"
+    },
+    {
+      "batchId": "mswv9j5dpr2w9t",
+      "cost": 1000,
+      "date": "2026-08-16",
+      "driver": "Tariq",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "mswv9j5ereuw3g",
+      "litres": 3.05,
+      "odometer": 1,
+      "pumpName": "Euro Sundar Estate",
+      "rate": 327.83,
+      "vehicle": "honda CD-70 (LEL-9190)"
+    },
+    {
+      "batchId": "mswvc33am54934",
+      "cost": 5200,
+      "date": "2026-08-17",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "40.34 km/L",
+      "fuelType": "PETROL",
+      "id": "mswvc33aoy3gsu",
+      "litres": 15.89,
+      "odometer": 41009,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 327.24,
+      "vehicle": "Suzuki Wagon-R (ARQ-526)"
+    },
+    {
+      "batchId": "mt15n2gm16e5y8",
+      "cost": 12700,
+      "date": "2026-08-18",
+      "driver": "Muhammad Zubair",
+      "fuelAverage": "8.15 km/L",
+      "fuelType": "DIESEL",
+      "id": "mt15n2gmfcrb23",
+      "litres": 32.38,
+      "odometer": 25939,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 392.22,
+      "vehicle": "Hyundai Porter (CAV-8213)"
+    },
+    {
+      "batchId": "mt15n2gm16e5y8",
+      "cost": 7230,
+      "date": "2026-08-18",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "9.74 km/L",
+      "fuelType": "PETROL",
+      "id": "mt15n2gmt75wm5",
+      "litres": 21.67,
+      "odometer": 166679,
+      "pumpName": "Euro Sundar Estate",
+      "rate": 333.6,
+      "vehicle": "Toyota Yaris (LEB-5449)"
+    },
+    {
+      "batchId": "mt15n2gm16e5y8",
+      "cost": 4410,
+      "date": "2026-08-19",
+      "driver": "Muhammad Zubair",
+      "fuelAverage": "6.18 km/L",
+      "fuelType": "PETROL",
+      "id": "mt15n2gmigl65x",
+      "litres": 13.11,
+      "odometer": 63513,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 336.34,
+      "vehicle": "Suzuki Ravi (CAJ-6701)"
+    },
+    {
+      "batchId": "mt15n2gm16e5y8",
+      "cost": 11780,
+      "date": "2026-08-19",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "8.17 km/L",
+      "fuelType": "PETROL",
+      "id": "mt15n2gm6x8zzp",
+      "litres": 35.02,
+      "odometer": 12820,
+      "pumpName": "PSO Sundar EstatePSO Sundar Estate",
+      "rate": 336.34,
+      "vehicle": "Changan Carwan (BPR-980)"
+    },
+    {
+      "batchId": "mt15n2gm16e5y8",
+      "cost": 20400,
+      "date": "2026-08-19",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "5.55 km/L",
+      "fuelType": "PETROL",
+      "id": "mt15n2gm7zcsv3",
+      "litres": 57.46,
+      "odometer": 45865,
+      "pumpName": "PSO Sundar Estate",
+      "rate": 355,
+      "vehicle": "EF-55"
+    },
+    {
+      "batchId": "mt15n2gm16e5y8",
+      "cost": 2000,
+      "date": "2026-08-18",
+      "driver": "Sharaz",
+      "fuelAverage": "—",
+      "fuelType": "PETROL",
+      "id": "mt15n2gmb738v2",
+      "litres": 5.99,
+      "odometer": 1,
+      "pumpName": "Euro Sundar Estate",
+      "rate": 333.6,
+      "vehicle": "Honda CD-70 (AXF-2378)"
+    },
+    {
+      "batchId": "mt15pkgrkkeiho",
+      "cost": 4400,
+      "date": "2026-08-19",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "13.76 km/L",
+      "fuelType": "PETROL",
+      "id": "mt15pkgswuhytm",
+      "litres": 13.08,
+      "odometer": 63767,
+      "pumpName": "Euro Sundar Estate",
+      "rate": 336.34,
+      "vehicle": "Suzuki Wagon-R (ARQ-334)"
+    },
+    {
+      "batchId": "mt15t7bc8j3f7b",
+      "cost": 17100,
+      "date": "2026-08-20",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "8.56 km/L",
+      "fuelType": "DIESEL",
+      "id": "mt15t7bcjb1sgk",
+      "litres": 46.87,
+      "odometer": 184480,
+      "pumpName": "Euro Sundar Estate",
+      "rate": 364.86,
+      "vehicle": "Hyundai Porter (CAF-4893)"
+    },
+    {
+      "batchId": "mt3zvws3zytxb0",
+      "cost": 14700,
+      "date": "2026-08-22",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "6.75 km/L",
+      "fuelType": "DIESEL",
+      "id": "mt3zvws33nrcs8",
+      "litres": 39.72,
+      "odometer": 184748,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 370.14,
+      "vehicle": "Hyundai Porter (CAF-4893)"
+    },
+    {
+      "batchId": "mt3zvws3zytxb0",
+      "cost": 13150,
+      "date": "2026-08-22",
+      "driver": "Saeed Muhammad",
+      "fuelAverage": "6.14 km/L",
+      "fuelType": "DIESEL",
+      "id": "mt3zvws3a1vj48",
+      "litres": 35.52,
+      "odometer": 26157,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 370.14,
+      "vehicle": "Hyundai Porter (CAV-8213)"
+    },
+    {
+      "batchId": "mt3zvws3zytxb0",
+      "cost": 14000,
+      "date": "2026-08-22",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "10.35 km/L",
+      "fuelType": "PETROL",
+      "id": "mt3zvws34633s3",
+      "litres": 40.76,
+      "odometer": 13242,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 343.44,
+      "vehicle": "Changan Carwan (BPR-980)"
+    },
+    {
+      "batchId": "mt4045yjm8a9qj",
+      "cost": 24700,
+      "date": "2026-08-22",
+      "driver": "Tanveer Abbas",
+      "fuelAverage": "5.99 km/L",
+      "fuelType": "DIESEL",
+      "id": "mt4045ykchi5hp",
+      "litres": 66.73,
+      "odometer": 231227,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 370.14,
+      "vehicle": "Hino (LES-4605)"
+    },
+    {
+      "batchId": "mt4045yjm8a9qj",
+      "cost": 10160,
+      "date": "2026-08-22",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "15.18 km/L",
+      "fuelType": "PETROL",
+      "id": "mt4045ykx2nds9",
+      "litres": 29.58,
+      "odometer": 38642,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 343.44,
+      "vehicle": "Suzuki Every (AVX-481)"
+    },
+    {
+      "batchId": "mt4045yjm8a9qj",
+      "cost": 4700,
+      "date": "2026-08-22",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "10.23 km/L",
+      "fuelType": "PETROL",
+      "id": "mt4045yka0cl03",
+      "litres": 13.68,
+      "odometer": 166819,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 343.44,
+      "vehicle": "Toyota Yaris (LEB-5449)"
+    },
+    {
+      "batchId": "mt4045yjm8a9qj",
+      "cost": 4000,
+      "date": "2026-08-22",
+      "driver": "Muhammad Ashfaq",
+      "fuelAverage": "7.38 km/L",
+      "fuelType": "PETROL",
+      "id": "mt4045yk7u6q5z",
+      "litres": 11.65,
+      "odometer": 63599,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 343.44,
+      "vehicle": "Suzuki Ravi (CAJ-6701)"
+    },
+    {
+      "batchId": "mt405rb0v8zh3k",
+      "cost": 5300,
+      "date": "2026-08-22",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "15.04 km/L",
+      "fuelType": "PETROL",
+      "id": "mt407mt5mgeuny",
+      "litres": 15.43,
+      "odometer": 63999,
+      "pumpName": "",
+      "rate": 343.44,
+      "vehicle": "Suzuki Wagon-R (ARQ-334)"
+    },
+    {
+      "batchId": "mt405rb0v8zh3k",
+      "cost": 2950,
+      "date": "2026-08-22",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "13.50 km/L",
+      "fuelType": "PETROL",
+      "id": "mt407mt5gmnflk",
+      "litres": 8.59,
+      "odometer": 41125,
+      "pumpName": "",
+      "rate": 343.44,
+      "vehicle": "Suzuki Wagon-R (ARQ-526)"
+    },
+    {
+      "batchId": "mt84yk9qb0mhso",
+      "cost": 2000,
+      "date": "2026-08-23",
+      "driver": "Azam",
+      "fuelAverage": "—",
+      "fuelType": "PETROL",
+      "id": "mt84yk9qowikaj",
+      "litres": 5.82,
+      "odometer": 1,
+      "pumpName": "Euro Sunder Estate",
+      "rate": 343.99,
+      "vehicle": "Honda CD-70 (AKN-8859)"
+    },
+    {
+      "batchId": "mt84yk9qb0mhso",
+      "cost": 2000,
+      "date": "2026-08-22",
+      "driver": "Usman",
+      "fuelAverage": "—",
+      "fuelType": "PETROL",
+      "id": "mt84yk9q2c608b",
+      "litres": 5.82,
+      "odometer": 1,
+      "pumpName": "Euro Sunder Estate",
+      "rate": 343.99,
+      "vehicle": "honda CD-70 (LEL-9190)"
+    },
+    {
+      "batchId": "mt895c0ekg967r",
+      "cost": 6800,
+      "date": "2026-08-25",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "11.93 km/L",
+      "fuelType": "PETROL",
+      "id": "mt895c0fjhh3ds",
+      "litres": 19.78,
+      "odometer": 167055,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 343.83,
+      "vehicle": "Toyota Yaris (LEB-5449)"
+    },
+    {
+      "batchId": "mt895c0ekg967r",
+      "cost": 6800,
+      "date": "2026-08-25",
+      "driver": "Muhammad Zubair",
+      "fuelAverage": "First",
+      "fuelType": "PETROL",
+      "id": "mt895c0f0tl9iw",
+      "litres": 19.78,
+      "odometer": 215359,
+      "pumpName": "Euro Sunder Estate",
+      "rate": 343.83,
+      "vehicle": "Toyota Vitz (LE-3153)"
+    },
+    {
+      "batchId": "mt895c0ekg967r",
+      "cost": 11120,
+      "date": "2026-08-25",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "9.03 km/L",
+      "fuelType": "PETROL",
+      "id": "mt895c0fkf9the",
+      "litres": 32.35,
+      "odometer": 13534,
+      "pumpName": "Euro Sunder Estate",
+      "rate": 343.83,
+      "vehicle": "Changan Carwan (BPR-980)"
+    },
+    {
+      "batchId": "mt896fel0gmodu",
+      "cost": 4100,
+      "date": "2026-08-25",
+      "driver": "Saeed Muhammad",
+      "fuelAverage": "15.77 km/L",
+      "fuelType": "PETROL",
+      "id": "mt896felings0g",
+      "litres": 11.92,
+      "odometer": 41313,
+      "pumpName": "Euro Sunder Estate",
+      "rate": 343.83,
+      "vehicle": "Suzuki Wagon-R (ARQ-526)"
+    },
+    {
+      "batchId": "mtb5qy50z1gdgx",
+      "cost": 20500,
+      "date": "2026-08-27",
+      "driver": "Tanveer Abbas",
+      "fuelAverage": "6.84 km/L",
+      "fuelType": "DIESEL",
+      "id": "mtb5qy51386bx6",
+      "litres": 54.86,
+      "odometer": 231602,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 373.65,
+      "vehicle": "Hino (LES-4605)"
+    },
+    {
+      "batchId": "mtb5qy50z1gdgx",
+      "cost": 17560,
+      "date": "2026-08-27",
+      "driver": "Muhammad Zubair",
+      "fuelAverage": "8.17 km/L",
+      "fuelType": "DIESEL",
+      "id": "mtb5qy51ys07t0",
+      "litres": 47,
+      "odometer": 185132,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 373.65,
+      "vehicle": "Hyundai Porter (CAF-4893)"
+    },
+    {
+      "batchId": "mtb5qy50z1gdgx",
+      "cost": 5560,
+      "date": "2026-08-27",
+      "driver": "Muhammad Zubair",
+      "fuelAverage": "7.82 km/L",
+      "fuelType": "PETROL",
+      "id": "mtb5qy51ah1gs5",
+      "litres": 16.12,
+      "odometer": 63725,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 344.95,
+      "vehicle": "Suzuki Ravi (CAJ-6701)"
+    },
+    {
+      "batchId": "mtb5qy50z1gdgx",
+      "cost": 2000,
+      "date": "2026-08-26",
+      "driver": "Shahbaz",
+      "fuelAverage": "—",
+      "fuelType": "PETROL",
+      "id": "mtb5qy51vu983g",
+      "litres": 5.79,
+      "odometer": 1,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 344.95,
+      "vehicle": "Honda CD-70 (AXF-2378)"
+    },
+    {
+      "batchId": "mtb5tif5lt6i96",
+      "cost": 8800,
+      "date": "2026-08-27",
+      "driver": "Saeed Muhammad",
+      "fuelAverage": "13.84 km/L",
+      "fuelType": "PETROL",
+      "id": "mtb5tif53u1kju",
+      "litres": 25.51,
+      "odometer": 64352,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 344.95,
+      "vehicle": "Suzuki Wagon-R (ARQ-334)"
+    },
+    {
+      "batchId": "mtb5tif5lt6i96",
+      "cost": 4400,
+      "date": "2026-08-27",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "14.89 km/L",
+      "fuelType": "PETROL",
+      "id": "mtb5tif51vzg9v",
+      "litres": 12.76,
+      "odometer": 41503,
+      "pumpName": "PSO Sunder Estate",
+      "rate": 344.95,
+      "vehicle": "Suzuki Wagon-R (ARQ-526)"
+    },
+    {
+      "batchId": "mtb5jf0qi33ag7",
+      "cost": 24890,
+      "date": "2026-08-27",
+      "driver": "Hafiz Usama Noor",
+      "fuelAverage": "9.46 km/L",
+      "fuelType": "PETROL",
+      "id": "mtb5w9a7s2vccz",
+      "litres": 68.2,
+      "odometer": 46510,
+      "pumpName": "",
+      "rate": 365,
+      "vehicle": "EF-55"
+    },
+    {
+      "batchId": "mtb5jf0qi33ag7",
+      "cost": 8950,
+      "date": "2026-08-27",
+      "driver": "Saeed Muhammad",
+      "fuelAverage": "7.09 km/L",
+      "fuelType": "PETROL",
+      "id": "mtb5w9a7de21jy",
+      "litres": 25.95,
+      "odometer": 85399,
+      "pumpName": "",
+      "rate": 344.95,
+      "vehicle": "Suzuki Bolan (AFS-612)"
+    },
+    {
+      "batchId": "mtb5jf0qi33ag7",
+      "cost": 10000,
+      "date": "2026-08-27",
+      "driver": "Muhammad Zubair",
+      "fuelAverage": "8.86 km/L",
+      "fuelType": "DIESEL",
+      "id": "mtb5w9a7d7g9gx",
+      "litres": 26.76,
+      "odometer": 26394,
+      "pumpName": "",
+      "rate": 373.65,
+      "vehicle": "Hyundai Porter (CAV-8213)"
+    },
+    {
+      "batchId": "mtb5jf0qi33ag7",
+      "cost": 9000,
+      "date": "2026-08-27",
+      "driver": "Muhammad Masood Nawaz",
+      "fuelAverage": "14.53 km/L",
+      "fuelType": "PETROL",
+      "id": "mtb5w9a7ncgp0i",
+      "litres": 26.09,
+      "odometer": 39021,
+      "pumpName": "",
+      "rate": 344.95,
+      "vehicle": "Suzuki Every (AVX-481)"
+    }
+  ],
+  "allotments": [
+    {
+      "date": "2024-01-01",
+      "department": "general",
+      "id": "mreuj4yunyi62x",
+      "notes": "",
+      "purpose": "GM Use",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4ytx0iv4f"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "general",
+      "id": "mreuj4yuwj22rh",
+      "notes": "",
+      "purpose": "Admin Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4ytgekdtv"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "general",
+      "id": "mreuj4yump20by",
+      "notes": "",
+      "purpose": "Advisor",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4ytf7uzpy"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "general",
+      "id": "mreuj4yui1qyfp",
+      "notes": "",
+      "purpose": "SCM Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yt5dchkg"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "general",
+      "id": "mreuj4yus4hnpd",
+      "notes": "",
+      "purpose": "Accounts Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yt830r5u"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "general",
+      "id": "mreuj4yuovffjk",
+      "notes": "",
+      "purpose": "Operation Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4ytbsf10v"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "general",
+      "id": "mreuj4yuoi3iwi",
+      "notes": "",
+      "purpose": "Pre-Press Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4ytz3zoyf"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "general",
+      "id": "mreuj4yuj1agsj",
+      "notes": "",
+      "purpose": "Maintenance & Project",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4ytv244fy"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "general",
+      "id": "mreuj4yuwockq8",
+      "notes": "",
+      "purpose": "Executive",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yucrukur"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "sale",
+      "id": "mreuj4yurvdcnf",
+      "notes": "",
+      "purpose": "National Sale Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yutbqlyw"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "sale",
+      "id": "mreuj4yuzjilkp",
+      "notes": "",
+      "purpose": "Export Sale Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yu6ounsf"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "sale",
+      "id": "mreuj4yu80pbkc",
+      "notes": "",
+      "purpose": "Asst. Area Sale Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yuain0vs"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "sale",
+      "id": "mreuj4yuebfogu",
+      "notes": "",
+      "purpose": "Area Sale Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yuvx1w8p"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "sale",
+      "id": "mreuj4yuh0q2kc",
+      "notes": "",
+      "purpose": "Area Sale Manager",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yusjomrx"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "sale",
+      "id": "mreuj4yus5tmm8",
+      "notes": "",
+      "purpose": "Sale Team Pool Vehicle",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yu48di13"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "sale",
+      "id": "mreuj4yuycvqq1",
+      "notes": "",
+      "purpose": "Sale Team Pool Vehicle",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yucuxjag"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "admin",
+      "id": "mreuj4yuqy3fcm",
+      "notes": "",
+      "purpose": "Admin Pool Vehicle",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yuqho4wy"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "admin",
+      "id": "mreuj4yulkjt38",
+      "notes": "",
+      "purpose": "Admin Pool Vehicle",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yubwheg3"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "admin",
+      "id": "mreuj4yuzk6smw",
+      "notes": "",
+      "purpose": "Admin Pool Vehicle",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yu59d0rg"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "admin",
+      "id": "mreuj4yuhxj6zi",
+      "notes": "",
+      "purpose": "Admin Pool Vehicle",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yua1y8vk"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "admin",
+      "id": "mreuj4yurdnafk",
+      "notes": "",
+      "purpose": "Admin Pool Vehicle",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yutdge2x"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "admin",
+      "id": "mreuj4yuahkhcc",
+      "notes": "",
+      "purpose": "For Company Use",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yuivr7pq"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "admin",
+      "id": "mreuj4yuxx58h2",
+      "notes": "",
+      "purpose": "For Company Use",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yu1xg77h"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "admin",
+      "id": "mreuj4yuckagw7",
+      "notes": "",
+      "purpose": "For Company Use",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yuxxy249"
+    },
+    {
+      "date": "2024-01-01",
+      "department": "admin",
+      "id": "mreuj4yuv0zn5d",
+      "notes": "",
+      "purpose": "For Company Use",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mreuj4yub8k04e"
+    },
+    {
+      "date": "2026-07-10",
+      "department": "scm",
+      "id": "mrew9z0w26t4bk",
+      "notes": "",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mrew9z0wk6ys1z"
+    },
+    {
+      "date": "2026-07-10",
+      "department": "scm",
+      "id": "mrewbhplygo0ub",
+      "notes": "",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mrewbhpllwle4b"
+    },
+    {
+      "date": "2026-07-10",
+      "department": "admin",
+      "id": "mrewchyf0tu3lb",
+      "notes": "",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mrewchyed3g38v"
+    },
+    {
+      "date": "2026-07-10",
+      "department": "admin",
+      "id": "mrewk5uk2rq0o6",
+      "notes": "",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mrewk5ukzzct0t"
+    },
+    {
+      "date": "2026-07-10",
+      "department": "admin",
+      "id": "mrewl8e8p6lkhg",
+      "notes": "",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mrewl8e897psj6"
+    },
+    {
+      "date": "2026-07-10",
+      "department": "admin",
+      "id": "mrewmgko6920jw",
+      "notes": "",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mrewmgkol01tc6"
+    },
+    {
+      "date": "2026-07-10",
+      "department": "accounts",
+      "id": "mrewoloebhn91b",
+      "notes": "",
+      "returnDate": "",
+      "status": "Active",
+      "vehicle": "mrewoloelgv3w5"
+    }
+  ],
+  "bills": [
+    {
+      "amount": 8700,
+      "billNo": "VFP-A-01",
+      "currentReading": "61500",
+      "date": "2026-07-10",
+      "driver": "mreuj4ytee3c7u",
+      "id": "mrew062gvl778x",
+      "nextReading": "66500",
+      "notes": "Engine Oil / Oil Filter / Air Filter / AC filter",
+      "referenceId": "mrew062fbx3jzw",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "mreuj4yuvx1w8p",
+      "vendor": "Makki Oil  Satore",
+      "vendorAddress": "Opposite DHA Rhaber"
+    },
+    {
+      "amount": 7590,
+      "billNo": "VFP-A-02",
+      "currentReading": "166000",
+      "date": "2026-08-01",
+      "driver": "mreuj4ytie3ggy",
+      "id": "mscsj33uol6eic",
+      "nextReading": "170000",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "referenceId": "mscsj33ud6oh9j",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "mreuj4yubwheg3",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "amount": 62190,
+      "batchDetails": [
+        {
+          "batchId": "msct8k5fyl02el",
+          "cost": 24140,
+          "date": "2026-08-03",
+          "driver": "mreuj4yt0xkc78",
+          "fuelAverage": "First",
+          "fuelType": "DIESEL",
+          "id": "msct8k5fmcdxe3",
+          "litres": 61.25,
+          "odometer": 230142,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 394.13,
+          "vehicle": "mreuj4yub8k04e"
+        },
+        {
+          "batchId": "msct8k5fyl02el",
+          "cost": 12600,
+          "date": "2026-08-03",
+          "driver": "mreuj4ytntv99w",
+          "fuelAverage": "First",
+          "fuelType": "DIESEL",
+          "id": "msct8k5fdtxnbu",
+          "litres": 31.97,
+          "odometer": 25058,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 394.13,
+          "vehicle": "mreuj4yu1xg77h"
+        },
+        {
+          "batchId": "msct8k5fyl02el",
+          "cost": 7950,
+          "date": "2026-08-03",
+          "driver": "mreuj4ytee3c7u",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msct8k5fqzn40x",
+          "litres": 23.54,
+          "odometer": 324183,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 337.78,
+          "vehicle": "mreuj4yuqho4wy"
+        },
+        {
+          "batchId": "msct8k5fyl02el",
+          "cost": 12000,
+          "date": "2026-08-03",
+          "driver": "mreuj4yt6zw0sb",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msct8k5fy1bmc0",
+          "litres": 35.53,
+          "odometer": 10880,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 337.78,
+          "vehicle": "mreuj4yutdge2x"
+        },
+        {
+          "batchId": "msct8k5fyl02el",
+          "cost": 5500,
+          "date": "2026-08-03",
+          "driver": "mreuj4ytcptuqn",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msct8k5fxvkpah",
+          "litres": 16.28,
+          "odometer": 166063,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 337.78,
+          "vehicle": "mreuj4yubwheg3"
+        }
+      ],
+      "billNo": "VFP-A-03",
+      "date": "2026-08-03",
+      "fuelBatch": true,
+      "fuelBatchId": "msct8k5fyl02el",
+      "id": "msct8k5fyl02el",
+      "notes": "Hino [PSO Sundar Estate]: 61.25L × PKR 394.13/L = PKR 24,140 | Hyundai Porter [PSO Sundar Estate]: 31.97L × PKR 394.13/L = PKR 12,600 | Toyota GLI [PSO Sundar Estate]: 23.54L × PKR 337.78/L = PKR 7,950 | Changan Carwan [PSO Sundar Estate]: 35.53L × PKR 337.78/L = PKR 12,000 | Toyota Yaris [PSO Sundar Estate]: 16.28L × PKR 337.78/L = PKR 5,500",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "mreuj4yub8k04e",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 6800,
+      "batchDetails": [
+        {
+          "batchId": "msctld9sxa09gp",
+          "cost": 6800,
+          "date": "2026-08-03",
+          "driver": "mreuj4ytie3ggy",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msctld9s28duyf",
+          "litres": 20.13,
+          "odometer": 63199,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 337.78,
+          "vehicle": "mreuj4yucuxjag"
+        }
+      ],
+      "billNo": "VFP-A-04",
+      "date": "2026-08-03",
+      "fuelBatch": true,
+      "fuelBatchId": "msctld9sxa09gp",
+      "id": "msctld9sxa09gp",
+      "notes": "Suzuki Wagon-R [PSO Sundar Estate]: 20.13L × PKR 337.78/L = PKR 6,800",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "mreuj4yucuxjag",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 10471,
+      "billNo": "VFP-A-05",
+      "currentReading": "25170",
+      "date": "2026-08-04",
+      "driver": "mreuj4ytee3c7u",
+      "id": "msfp73bmb8yvbw",
+      "nextReading": "30170",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "referenceId": "msfp73bmlocv2y",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "mreuj4yu1xg77h",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "amount": 8310,
+      "billNo": "VFP-A-06",
+      "currentReading": "39780",
+      "date": "2026-08-04",
+      "driver": "mreuj4yt6zw0sb",
+      "id": "msfp9sd3xop9yl",
+      "nextReading": "44780",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "referenceId": "msfp9sd3hui671",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "mreuj4yt5dchkg",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "amount": 1000,
+      "billNo": "VFP-A-07",
+      "currentReading": "40000",
+      "date": "2026-08-04",
+      "driver": "mreuj4yt6zw0sb",
+      "id": "msfpfgaq302shz",
+      "nextReading": "80000",
+      "notes": "Tyre Replace Labour",
+      "referenceId": "msfpfgaqmg35mp",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "mreuj4yt5dchkg",
+      "vendor": "Haroon Tyre Shop",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "amount": 1200,
+      "billNo": "VFP-A-08",
+      "currentReading": "",
+      "date": "2026-08-04",
+      "driver": "mreuj4yt6zw0sb",
+      "id": "msfpkgh8gs426v",
+      "nextReading": "",
+      "notes": "Wheel Alignment /  Wheel Balancing Labour",
+      "referenceId": "msfpkgh83zzpbq",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "mreuj4yt5dchkg",
+      "vendor": "Shahzad Wheel Alignment Shop",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "amount": 250,
+      "billNo": "VFP-A-09",
+      "currentReading": "",
+      "date": "2026-08-04",
+      "driver": "mreuj4ytie3ggy",
+      "id": "msfpyhhc3wulpy",
+      "nextReading": "",
+      "notes": "Tyre Puncture Labour",
+      "referenceId": "msfpyhhcfuuh62",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "mrewl8e897psj6",
+      "vendor": "EURO PP2 Shop",
+      "vendorAddress": "Sundar Estate"
+    },
+    {
+      "amount": 5500,
+      "batchDetails": [
+        {
+          "batchId": "msfqc9n0j3jpwc",
+          "cost": 5500,
+          "date": "2026-08-04",
+          "driver": "mreuj4ytee3c7u",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msfqc9n1ybjg3g",
+          "litres": 16.48,
+          "odometer": 40647,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 333.7,
+          "vehicle": "mreuj4yu48di13"
+        }
+      ],
+      "billNo": "VFP-A-10",
+      "date": "2026-08-04",
+      "fuelBatch": true,
+      "fuelBatchId": "msfqc9n0j3jpwc",
+      "id": "msfqc9n0j3jpwc",
+      "notes": "Suzuki Wagon-R [PSO Sundar Estate]: 16.48L × PKR 333.7/L = PKR 5,500",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "mreuj4yu48di13",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 11520,
+      "batchDetails": [
+        {
+          "batchId": "msfqg6ixfv9k3w",
+          "cost": 10520,
+          "date": "2026-08-04",
+          "driver": "mreuj4yt6zw0sb",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msfqg6ixsbgr5z",
+          "litres": 31.52,
+          "odometer": 36983,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 333.7,
+          "vehicle": "mreuj4yucrukur"
+        },
+        {
+          "batchId": "msfqg6ixfv9k3w",
+          "cost": 1000,
+          "date": "2026-08-05",
+          "driver": "mreuj4ytntv99w",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msfqg6ix6n1xhd",
+          "litres": 2.99,
+          "odometer": 1,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 332.78,
+          "vehicle": "mrewl8e897psj6"
+        }
+      ],
+      "billNo": "VFP-A-11",
+      "date": "2026-08-04",
+      "fuelBatch": true,
+      "fuelBatchId": "msfqg6ixfv9k3w",
+      "id": "msfqg6ixfv9k3w",
+      "notes": "Suzuki Every [PSO Sundar Estate]: 31.52L × PKR 333.7/L = PKR 10,520 | Honda CD-70 [PSO Sundar Estate]: 2.99L × PKR 332.78/L = PKR 1,000",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "mreuj4yucrukur",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 45550,
+      "batchDetails": [
+        {
+          "batchId": "msfoxocmupjmon",
+          "cost": 19000,
+          "date": "2026-08-05",
+          "driver": "mreuj4ytntv99w",
+          "fuelAverage": "First",
+          "fuelType": "DIESEL",
+          "id": "msfoxocm63uygv",
+          "litres": 49.02,
+          "odometer": 182899,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 387.61,
+          "vehicle": "mreuj4yuxxy249"
+        },
+        {
+          "batchId": "msfoxocmupjmon",
+          "cost": 12830,
+          "date": "2026-08-05",
+          "driver": "mreuj4ytie3ggy",
+          "fuelAverage": "6.86 km/L",
+          "fuelType": "DIESEL",
+          "id": "msfoxocmywdl4n",
+          "litres": 33.1,
+          "odometer": 25285,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 387.61,
+          "vehicle": "mreuj4yu1xg77h"
+        },
+        {
+          "batchId": "msfoxocmupjmon",
+          "cost": 7720,
+          "date": "2026-08-05",
+          "driver": "mreuj4yt6zw0sb",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msfoxocm9u0wdi",
+          "litres": 23.37,
+          "odometer": 62974,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 330.31,
+          "vehicle": "mreuj4yuivr7pq"
+        },
+        {
+          "batchId": "msfoxocmupjmon",
+          "cost": 6000,
+          "date": "2026-08-05",
+          "driver": "mreuj4ytee3c7u",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msfoxocmjdzoef",
+          "litres": 18.16,
+          "odometer": 85215,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 330.31,
+          "vehicle": "mreuj4yua1y8vk"
+        }
+      ],
+      "billNo": "VFP-A-12",
+      "date": "2026-08-05",
+      "fuelBatch": true,
+      "fuelBatchId": "msfoxocmupjmon",
+      "id": "msfoxocmupjmon",
+      "notes": "Hyundai Porter [PSO Sundar Estate]: 49.02L × PKR 387.61/L = PKR 19,000 | Hyundai Porter [PSO Sundar Estate]: 33.1L × PKR 387.61/L = PKR 12,830 | Suzuki Ravi [PSO Sundar Estate]: 23.37L × PKR 330.31/L = PKR 7,720 | Suzuki Bolan [PSO Sundar Estate]: 18.16L × PKR 330.31/L = PKR 6,000",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "mreuj4yuxxy249",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 47630,
+      "batchDetails": [
+        {
+          "batchId": "msh1p1moxo5agp",
+          "cost": 22300,
+          "date": "2026-08-06",
+          "driver": "Tanveer Abbas",
+          "fuelAverage": "",
+          "fuelType": "DIESEL",
+          "id": "msh287ny1dsljb",
+          "litres": 57.83,
+          "odometer": 230501,
+          "pumpName": "",
+          "rate": 385.61,
+          "vehicle": "Hino (LES-4605)"
+        },
+        {
+          "batchId": "msh1p1moxo5agp",
+          "cost": 15030,
+          "date": "2026-08-06",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "msh287nyzrj0no",
+          "litres": 44.9,
+          "odometer": 11302,
+          "pumpName": "",
+          "rate": 334.76,
+          "vehicle": "Changan Carwan (BPR-980)"
+        },
+        {
+          "batchId": "msh1p1moxo5agp",
+          "cost": 8300,
+          "date": "2026-08-06",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "msh287ny78k0ki",
+          "litres": 24.79,
+          "odometer": 166319,
+          "pumpName": "",
+          "rate": 334.76,
+          "vehicle": "Toyota Yaris (LEB-5449)"
+        },
+        {
+          "batchId": "msh1p1moxo5agp",
+          "cost": 2000,
+          "date": "2026-08-06",
+          "driver": "shahbaz",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "msh287nyjbhy0i",
+          "litres": 5.96,
+          "odometer": 1,
+          "pumpName": "",
+          "rate": 335.41,
+          "vehicle": "Honda CD-70 (AXF-2378)"
+        }
+      ],
+      "billNo": "VFP-A-13",
+      "date": "2026-08-06",
+      "fuelBatch": true,
+      "fuelBatchId": "msh1p1moxo5agp",
+      "id": "msh1p1moxo5agp",
+      "notes": "Hino (LES-4605): 57.83L × PKR 385.61/L = PKR 22,300 | Changan Carwan (BPR-980): 44.9L × PKR 334.76/L = PKR 15,030 | Toyota Yaris (LEB-5449): 24.79L × PKR 334.76/L = PKR 8,300 | Honda CD-70 (AXF-2378): 5.96L × PKR 335.41/L = PKR 2,000",
+      "pumpName": "",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "Fuel Voucher (4 Vehicles)"
+    },
+    {
+      "amount": 6050,
+      "batchDetails": [
+        {
+          "batchId": "msh1tcxemf8lym",
+          "cost": 2650,
+          "date": "2026-08-06",
+          "driver": "Saeed Muhammad",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msh1tcxe24yq2b",
+          "litres": 7.92,
+          "odometer": 63324,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 334.76,
+          "vehicle": "Suzuki Wagon-R (ARQ-334)"
+        },
+        {
+          "batchId": "msh1tcxemf8lym",
+          "cost": 3400,
+          "date": "2026-08-06",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "msh1tcxefbj30m",
+          "litres": 10.16,
+          "odometer": 40368,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 334.76,
+          "vehicle": "Suzuki Wagon-R (ARQ-526)"
+        }
+      ],
+      "billNo": "VFP-A-14",
+      "date": "2026-08-06",
+      "fuelBatch": true,
+      "fuelBatchId": "msh1tcxemf8lym",
+      "id": "msh1tcxemf8lym",
+      "notes": "Suzuki Wagon-R (ARQ-334) [PSO Sundar Estate]: 7.92L × PKR 334.76/L = PKR 2,650 | Suzuki Wagon-R (ARQ-526) [PSO Sundar Estate]: 10.16L × PKR 334.76/L = PKR 3,400",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Suzuki Wagon-R (ARQ-334)",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 6000,
+      "billNo": "VFP-A-15",
+      "currentReading": "",
+      "date": "2026-08-06",
+      "driver": "Muhammad Ashfaq",
+      "id": "msh349zsa727yj",
+      "nextReading": "",
+      "notes": "Payment Deposite For Account (Old Tyre Sale)",
+      "referenceId": "msh349zs66vqdy",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Suzuki Wagon-R (ARQ-526)",
+      "vendor": "Shahzad Wheel Alignment Shop",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "amount": 2000,
+      "billNo": "VFP-A-16",
+      "currentReading": "40000",
+      "date": "2026-08-06",
+      "driver": "Muhammad Ashfaq",
+      "id": "msh3815opcqs8a",
+      "nextReading": "80000",
+      "notes": "Wheel Alignment / Wheel Balancing / Tyre Change Labour",
+      "referenceId": "msh3815o8nsi78",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Suzuki Wagon-R (ARQ-526)",
+      "vendor": "Shahzad Wheel Alignment Shop",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "amount": 2100,
+      "billNo": "VFP-A-17",
+      "currentReading": "",
+      "date": "2026-08-06",
+      "driver": "Tanveer Abbas",
+      "id": "mshe420sf8d46b",
+      "nextReading": "",
+      "notes": "Cultch Kit (Qty. 2) , Cultch Labour",
+      "referenceId": "mshe420sofpiao",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "Sufain Auto Store",
+      "vendorAddress": "Raiwind Road Lahore"
+    },
+    {
+      "amount": 36590,
+      "batchDetails": [
+        {
+          "batchId": "msk5y9mf4tc4f2",
+          "cost": 20910,
+          "date": "2026-08-08",
+          "driver": "Saeed Muhammad",
+          "fuelAverage": "7.94 km/L",
+          "fuelType": "DIESEL",
+          "id": "msk5y9mfar5rno",
+          "litres": 54.64,
+          "odometer": 183333,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 382.67,
+          "vehicle": "Hyundai Porter (CAF-4893)"
+        },
+        {
+          "batchId": "msk5y9mf4tc4f2",
+          "cost": 9180,
+          "date": "2026-08-08",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "11.34 km/L",
+          "fuelType": "PETROL",
+          "id": "msk5y9mfdzp1ws",
+          "litres": 27.87,
+          "odometer": 37299,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 329.43,
+          "vehicle": "Suzuki Every (AVX-481)"
+        },
+        {
+          "batchId": "msk5y9mf4tc4f2",
+          "cost": 6500,
+          "date": "2026-08-08",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "7.81 km/L",
+          "fuelType": "PETROL",
+          "id": "msk5y9mfp59tzc",
+          "litres": 19.73,
+          "odometer": 63128,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 329.43,
+          "vehicle": "Suzuki Ravi (CAJ-6701)"
+        }
+      ],
+      "billNo": "VFP-A-18",
+      "date": "2026-08-08",
+      "fuelBatch": true,
+      "fuelBatchId": "msk5y9mf4tc4f2",
+      "id": "msk5y9mf4tc4f2",
+      "notes": "Hyundai Porter (CAF-4893) [PSO Sundar Estate]: 54.64L × PKR 382.67/L = PKR 20,910 | Suzuki Every (AVX-481) [PSO Sundar Estate]: 27.87L × PKR 329.43/L = PKR 9,180 | Suzuki Ravi (CAJ-6701) [PSO Sundar Estate]: 19.73L × PKR 329.43/L = PKR 6,500",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hyundai Porter (CAF-4893)",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 600,
+      "billNo": "VFP-A-19",
+      "currentReading": "",
+      "date": "2026-08-08",
+      "driver": "Muhammad Masood Nawaz",
+      "id": "msk650e1h3srcw",
+      "nextReading": "",
+      "notes": "Tyre Puncture (300*2) = 600",
+      "referenceId": "msk650e01nx5wx",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Suzuki Every (AVX-481)",
+      "vendor": "Shahzad Tyre Shop",
+      "vendorAddress": "PSO Pump Sundar Estate"
+    },
+    {
+      "amount": 1660,
+      "billNo": "VFP-A-20",
+      "currentReading": "",
+      "date": "2026-08-08",
+      "driver": "Muhammad Zubair",
+      "id": "msk6a4l7ka66yk",
+      "nextReading": "",
+      "notes": "Engine Oil, Tuning, Filter, Dumchi & Rubber",
+      "referenceId": "msk6a4l7v2dipo",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Honda CD-70 (BCV-3278)",
+      "vendor": "Rafique Autos",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "amount": 700,
+      "billNo": "VFP-A-21",
+      "currentReading": "",
+      "date": "2026-08-08",
+      "driver": "Muhammad Ashfaq",
+      "id": "msmskwx4v81m8l",
+      "nextReading": "",
+      "notes": "Air Filter",
+      "referenceId": "msmskwx35za4dy",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Hyundai Porter (CAV-8213)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "amount": 7900,
+      "billNo": "VFP-A-22",
+      "currentReading": "63500",
+      "date": "2026-08-08",
+      "driver": "Muhammad Ashfaq",
+      "id": "msmsp41wwu3h8b",
+      "nextReading": "68500",
+      "notes": "Engine Oil / Oil Filter / Air Filter",
+      "referenceId": "msmsp41w7mee27",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Suzuki Wagon-R (ARQ-334)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "amount": 13000,
+      "batchDetails": [
+        {
+          "batchId": "msmszm3ilha2qq",
+          "cost": 12000,
+          "date": "2026-08-10",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "11.17 km/L",
+          "fuelType": "PETROL",
+          "id": "msmszm3im6am1b",
+          "litres": 36.43,
+          "odometer": 11709,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 329.43,
+          "vehicle": "Changan Carwan (BPR-980)"
+        },
+        {
+          "batchId": "msmszm3ilha2qq",
+          "cost": 1000,
+          "date": "2026-08-09",
+          "driver": "Azam",
+          "fuelAverage": "—",
+          "fuelType": "PETROL",
+          "id": "msmszm3jxq9kn7",
+          "litres": 3.03,
+          "odometer": 1,
+          "pumpName": "Euro Sundar Estate",
+          "rate": 330.02,
+          "vehicle": "Honda CD-70 (AKN-8859)"
+        }
+      ],
+      "billNo": "VFP-A-23",
+      "date": "2026-08-10",
+      "fuelBatch": true,
+      "fuelBatchId": "msmszm3ilha2qq",
+      "id": "msmszm3ilha2qq",
+      "notes": "Changan Carwan (BPR-980) [PSO Sundar Estate]: 36.43L × PKR 329.43/L = PKR 12,000 | Honda CD-70 (AKN-8859) [Euro Sundar Estate]: 3.03L × PKR 330.02/L = PKR 1,000",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Changan Carwan (BPR-980)",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 12128,
+      "billNo": "VFP-A-24",
+      "currentReading": "91100",
+      "date": "2026-08-10",
+      "driver": "Muhammad Ashfaq",
+      "id": "mso8r21lp0a6oz",
+      "nextReading": "96100",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "referenceId": "mso8r21lxadgpw",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Toyota Grande (ARX-361)",
+      "vendor": "Makki  Oil Store",
+      "vendorAddress": "Opposite DHA  Rahbar"
+    },
+    {
+      "amount": 1800,
+      "billNo": "VFP-A-25",
+      "currentReading": "",
+      "date": "2026-08-10",
+      "driver": "Hafiz Usama Noor",
+      "id": "mso8zba4qmdp9o",
+      "nextReading": "",
+      "notes": "Power Window Switch Repair",
+      "referenceId": "mso8zba4bh3yes",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Suzuki Wagon-R (ARQ-965)",
+      "vendor": "New Daisun Auto Store",
+      "vendorAddress": "Lahore"
+    },
+    {
+      "amount": 2100,
+      "billNo": "VFP-A-26",
+      "currentReading": "",
+      "date": "2026-08-10",
+      "driver": "Muhammad Masood Nawaz",
+      "id": "mso94ocgku6af2",
+      "nextReading": "",
+      "notes": "One Puncture (300), Tyre Cut Pice (600*3=1800)",
+      "referenceId": "mso94ocfve2c38",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Changan Carwan (BPR-980)",
+      "vendor": "Euro PP2",
+      "vendorAddress": "Sundar Estate"
+    },
+    {
+      "amount": 200,
+      "billNo": "VFP-A-27",
+      "currentReading": "",
+      "date": "2026-08-10",
+      "driver": "Azam",
+      "id": "mso97mth07nwrw",
+      "nextReading": "",
+      "notes": "Bike Tyre  Puncture (100-2=200)",
+      "referenceId": "mso97mthhc31hn",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "honda CD-70 (LEL-9190)",
+      "vendor": "Euro PP2",
+      "vendorAddress": "Sundar Estate"
+    },
+    {
+      "amount": 36000,
+      "batchDetails": [
+        {
+          "batchId": "mso9ixrakils31",
+          "cost": 19500,
+          "date": "2026-08-11",
+          "driver": "Tanveer Abbas",
+          "fuelAverage": "6.40 km/L",
+          "fuelType": "DIESEL",
+          "id": "mso9ixraahl69h",
+          "litres": 50.96,
+          "odometer": 230827,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 382.67,
+          "vehicle": "Hino (LES-4605)"
+        },
+        {
+          "batchId": "mso9ixrakils31",
+          "cost": 16500,
+          "date": "2026-08-11",
+          "driver": "Saeed Muhammad",
+          "fuelAverage": "9.04 km/L",
+          "fuelType": "DIESEL",
+          "id": "mso9ixraxzbv6f",
+          "litres": 43.12,
+          "odometer": 25675,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 382.67,
+          "vehicle": "Hyundai Porter (CAV-8213)"
+        }
+      ],
+      "billNo": "VFP-A-28",
+      "date": "2026-08-11",
+      "fuelBatch": true,
+      "fuelBatchId": "mso9ixrakils31",
+      "id": "mso9ixrakils31",
+      "notes": "Hino (LES-4605) [PSO Sundar Estate]: 50.96L × PKR 382.67/L = PKR 19,500 | Hyundai Porter (CAV-8213) [PSO Sundar Estate]: 43.12L × PKR 382.67/L = PKR 16,500",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 2015,
+      "billNo": "VFP-A-29",
+      "currentReading": "",
+      "date": "2026-08-11",
+      "driver": "Muhammad Masood Nawaz",
+      "id": "mspwsdr98h7d4t",
+      "nextReading": "",
+      "notes": "Traffic Challan",
+      "referenceId": "mspwsdr9nz41op",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Hyundai Porter (CAV-8213)",
+      "vendor": "Easypaisa",
+      "vendorAddress": "Online"
+    },
+    {
+      "amount": 7000,
+      "billNo": "VFP-A-30",
+      "currentReading": "",
+      "date": "2026-08-12",
+      "driver": "Muhammad Ashfaq",
+      "id": "mspwopl4jowwck",
+      "nextReading": "",
+      "notes": "Remote Repair (001535634)(G)Boot.",
+      "referenceId": "mspwopl4bx7s64",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Toyota GLI (AFX-196)",
+      "vendor": "Madina Lock Master",
+      "vendorAddress": "LAHORE"
+    },
+    {
+      "amount": 36160,
+      "batchDetails": [
+        {
+          "batchId": "mspx333x3ovu5d",
+          "cost": 17600,
+          "date": "2026-08-12",
+          "driver": "Saeed Muhammad",
+          "fuelAverage": "8.05 km/L",
+          "fuelType": "DIESEL",
+          "id": "mspx333x9vysts",
+          "litres": 45.83,
+          "odometer": 183702,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 384.06,
+          "vehicle": "Hyundai Porter (CAF-4893)"
+        },
+        {
+          "batchId": "mspx333x3ovu5d",
+          "cost": 6100,
+          "date": "2026-08-12",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "8.01 km/L",
+          "fuelType": "PETROL",
+          "id": "mspx333xq0hrxy",
+          "litres": 18.61,
+          "odometer": 166468,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 327.73,
+          "vehicle": "Toyota Yaris (LEB-5449)"
+        },
+        {
+          "batchId": "mspx333x3ovu5d",
+          "cost": 10460,
+          "date": "2026-08-12",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "8.99 km/L",
+          "fuelType": "PETROL",
+          "id": "mspx333xxwfkje",
+          "litres": 31.93,
+          "odometer": 11996,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 327.73,
+          "vehicle": "Changan Carwan (BPR-980)"
+        },
+        {
+          "batchId": "mspx333x3ovu5d",
+          "cost": 2000,
+          "date": "2026-08-12",
+          "driver": "Mutti Ur Rahman",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "mspx333xhy5mv4",
+          "litres": 6.06,
+          "odometer": 1,
+          "pumpName": "Euro Sundar Estate",
+          "rate": 330.02,
+          "vehicle": "Honda CD-70 (BCV-3278)"
+        }
+      ],
+      "billNo": "VFP-A-31",
+      "date": "2026-08-12",
+      "fuelBatch": true,
+      "fuelBatchId": "mspx333x3ovu5d",
+      "id": "mspx333x3ovu5d",
+      "notes": "Hyundai Porter (CAF-4893) [PSO Sundar Estate]: 45.83L × PKR 384.06/L = PKR 17,600 | Toyota Yaris (LEB-5449) [PSO Sundar Estate]: 18.61L × PKR 327.73/L = PKR 6,100 | Changan Carwan (BPR-980) [PSO Sundar Estate]: 31.93L × PKR 327.73/L = PKR 10,460 | Honda CD-70 (BCV-3278) [Euro Sundar Estate]: 6.06L × PKR 330.02/L = PKR 2,000",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hyundai Porter (CAF-4893)",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 5600,
+      "batchDetails": [
+        {
+          "batchId": "mspx5iru0vinpk",
+          "cost": 5600,
+          "date": "2026-08-12",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "15.39 km/L",
+          "fuelType": "PETROL",
+          "id": "mspx5iru93tw8b",
+          "litres": 17.09,
+          "odometer": 63587,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 327.73,
+          "vehicle": "Suzuki Wagon-R (ARQ-334)"
+        }
+      ],
+      "billNo": "VFP-A-32",
+      "date": "2026-08-12",
+      "fuelBatch": true,
+      "fuelBatchId": "mspx5iru0vinpk",
+      "id": "mspx5iru0vinpk",
+      "notes": "Suzuki Wagon-R (ARQ-334) [PSO Sundar Estate]: 17.09L × PKR 327.73/L = PKR 5,600",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Suzuki Wagon-R (ARQ-334)",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 39820,
+      "batchDetails": [
+        {
+          "batchId": "msrcpu6m1m948f",
+          "cost": 20400,
+          "date": "2026-08-12",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "msrcr5ibh0g0r1",
+          "litres": 57.46,
+          "odometer": 45110,
+          "pumpName": "",
+          "rate": 355,
+          "vehicle": "EF-55"
+        },
+        {
+          "batchId": "msrcpu6m1m948f",
+          "cost": 8800,
+          "date": "2026-08-13",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "msrcr5ib28bgov",
+          "litres": 26.93,
+          "odometer": 37828,
+          "pumpName": "",
+          "rate": 326.79,
+          "vehicle": "Suzuki Every (AVX-481)"
+        },
+        {
+          "batchId": "msrcpu6m1m948f",
+          "cost": 7620,
+          "date": "2026-08-13",
+          "driver": "Saeed Muhammad",
+          "fuelAverage": "2717.37 km/L",
+          "fuelType": "PETROL",
+          "id": "msrcr5ib7zv8ru",
+          "litres": 23.32,
+          "odometer": 63432,
+          "pumpName": "",
+          "rate": 326.79,
+          "vehicle": "Suzuki Ravi (CAJ-6701)"
+        },
+        {
+          "batchId": "msrcpu6m1m948f",
+          "cost": 2000,
+          "date": "2026-08-12",
+          "driver": "sharza",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "msrcr5iblijmez",
+          "litres": 6.1,
+          "odometer": 1,
+          "pumpName": "",
+          "rate": 327.73,
+          "vehicle": "Honda CD-70 (AXF-2378)"
+        },
+        {
+          "batchId": "msrcpu6m1m948f",
+          "cost": 1000,
+          "date": "2026-08-12",
+          "driver": "Rubbani",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "msrcr5icbiv2ru",
+          "litres": 3.04,
+          "odometer": 1,
+          "pumpName": "",
+          "rate": 328.32,
+          "vehicle": "Honda CG-125 (AHL-7618)"
+        }
+      ],
+      "billNo": "VFP-A-33",
+      "date": "2026-08-12",
+      "fuelBatch": true,
+      "fuelBatchId": "msrcpu6m1m948f",
+      "id": "msrcpu6m1m948f",
+      "notes": "EF-55: 57.46L × PKR 355/L = PKR 20,400 | Suzuki Every (AVX-481): 26.93L × PKR 326.79/L = PKR 8,800 | Suzuki Ravi (CAJ-6701): 23.32L × PKR 326.79/L = PKR 7,620 | Honda CD-70 (AXF-2378): 6.1L × PKR 327.73/L = PKR 2,000 | Honda CG-125 (AHL-7618): 3.04L × PKR 328.32/L = PKR 1,000",
+      "pumpName": "",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "EF-55",
+      "vendor": "Fuel Voucher (5 Vehicles)"
+    },
+    {
+      "amount": 8250,
+      "billNo": "VFP-A-34",
+      "currentReading": "41000",
+      "date": "2026-08-13",
+      "driver": "Hafiz Usama Noor",
+      "id": "msrcyoliinl2uu",
+      "nextReading": "46000",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "referenceId": "msrcyoli6uysvn",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Suzuki Wagon-R (ARQ-526)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "amount": 9550,
+      "billNo": "VFP-A-35",
+      "currentReading": "28000",
+      "date": "2026-08-13",
+      "driver": "Muhammad Masood Nawaz",
+      "id": "msrd0cfn0vk2q0",
+      "nextReading": "33000",
+      "notes": "Engine Oil / Air Filter / Oil Filter",
+      "referenceId": "msrd0cfnsi8gr4",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Suzuki Swift (AWM-981)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "amount": 6000,
+      "batchDetails": [
+        {
+          "batchId": "mswv9j5dpr2w9t",
+          "cost": 3000,
+          "date": "2026-08-15",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "—",
+          "fuelType": "PETROL",
+          "id": "mswv9j5ehedt8r",
+          "litres": 9.15,
+          "odometer": 12534,
+          "pumpName": "PSO Lahore",
+          "rate": 327.57,
+          "vehicle": "Changan Carwan (BPR-980)"
+        },
+        {
+          "batchId": "mswv9j5dpr2w9t",
+          "cost": 2000,
+          "date": "2026-08-13",
+          "driver": "Azam",
+          "fuelAverage": "—",
+          "fuelType": "PETROL",
+          "id": "mswv9j5e2kjo3a",
+          "litres": 6.1,
+          "odometer": 1,
+          "pumpName": "Euro Sundar Estate",
+          "rate": 327.38,
+          "vehicle": "Honda CD-70 (AKN-8859)"
+        },
+        {
+          "batchId": "mswv9j5dpr2w9t",
+          "cost": 1000,
+          "date": "2026-08-16",
+          "driver": "Tariq",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "mswv9j5ereuw3g",
+          "litres": 3.05,
+          "odometer": 1,
+          "pumpName": "Euro Sundar Estate",
+          "rate": 327.83,
+          "vehicle": "honda CD-70 (LEL-9190)"
+        }
+      ],
+      "billNo": "VFP-A-36",
+      "date": "2026-08-15",
+      "fuelBatch": true,
+      "fuelBatchId": "mswv9j5dpr2w9t",
+      "id": "mswv9j5dpr2w9t",
+      "notes": "Changan Carwan (BPR-980) [PSO Lahore]: 9.15L × PKR 327.57/L = PKR 3,000 | Honda CD-70 (AKN-8859) [Euro Sundar Estate]: 6.1L × PKR 327.38/L = PKR 2,000 | honda CD-70 (LEL-9190) [Euro Sundar Estate]: 3.05L × PKR 327.83/L = PKR 1,000",
+      "pumpName": "PSO Lahore",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Changan Carwan (BPR-980)",
+      "vendor": "PSO Lahore"
+    },
+    {
+      "amount": 14350,
+      "billNo": "VFP-A-37",
+      "currentReading": "45480",
+      "date": "2026-08-16",
+      "driver": "Muhammad Ashfaq",
+      "id": "mswvin1bgs22n0",
+      "nextReading": "49480",
+      "notes": "Engine Oil / Oil Filter / Air Filter",
+      "referenceId": "mswvin1bluaqir",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "EF-55",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "amount": 63720,
+      "batchDetails": [
+        {
+          "batchId": "mswv39g8z1szuz",
+          "cost": 19000,
+          "date": "2026-08-17",
+          "driver": "Muhammad Zubair",
+          "fuelAverage": "7.65 km/L",
+          "fuelType": "DIESEL",
+          "id": "mswv39g8fsoomv",
+          "litres": 49.25,
+          "odometer": 184079,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 385.76,
+          "vehicle": "Hyundai Porter (CAF-4893)"
+        },
+        {
+          "batchId": "mswv39g8z1szuz",
+          "cost": 23000,
+          "date": "2026-08-16",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "6.73 km/L",
+          "fuelType": "PETROL",
+          "id": "mswv39g88ofg0j",
+          "litres": 64.79,
+          "odometer": 45546,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 355,
+          "vehicle": "EF-55"
+        },
+        {
+          "batchId": "mswv39g8z1szuz",
+          "cost": 13500,
+          "date": "2026-08-17",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "13.04 km/L",
+          "fuelType": "PETROL",
+          "id": "mswv39g8h49w3c",
+          "litres": 41.25,
+          "odometer": 12534,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 327.24,
+          "vehicle": "Changan Carwan (BPR-980)"
+        },
+        {
+          "batchId": "mswv39g8z1szuz",
+          "cost": 8220,
+          "date": "2026-08-17",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "14.54 km/L",
+          "fuelType": "PETROL",
+          "id": "mswv39g8lphhio",
+          "litres": 25.11,
+          "odometer": 38193,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 327.24,
+          "vehicle": "Suzuki Every (AVX-481)"
+        }
+      ],
+      "billNo": "VFP-A-38",
+      "date": "2026-08-17",
+      "fuelBatch": true,
+      "fuelBatchId": "mswv39g8z1szuz",
+      "id": "mswv39g8z1szuz",
+      "notes": "Hyundai Porter (CAF-4893) [PSO Sundar Estate]: 49.25L × PKR 385.76/L = PKR 19,000 | EF-55 [PSO Sundar Estate]: 64.79L × PKR 355/L = PKR 23,000 | Changan Carwan (BPR-980) [PSO Sundar Estate]: 41.25L × PKR 327.24/L = PKR 13,500 | Suzuki Every (AVX-481) [PSO Sundar Estate]: 25.11L × PKR 327.24/L = PKR 8,220",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hyundai Porter (CAF-4893)",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 5200,
+      "batchDetails": [
+        {
+          "batchId": "mswvc33am54934",
+          "cost": 5200,
+          "date": "2026-08-17",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "—",
+          "fuelType": "PETROL",
+          "id": "mswvc33aoy3gsu",
+          "litres": 15.89,
+          "odometer": 41009,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 327.24,
+          "vehicle": "Suzuki Wagon-R (ARQ-526)"
+        }
+      ],
+      "billNo": "VFP-A-39",
+      "date": "2026-08-17",
+      "fuelBatch": true,
+      "fuelBatchId": "mswvc33am54934",
+      "id": "mswvc33am54934",
+      "notes": "Suzuki Wagon-R (ARQ-526) [PSO Sundar Estate]: 15.89L × PKR 327.24/L = PKR 5,200",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Suzuki Wagon-R (ARQ-526)",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 5000,
+      "billNo": "VFP-A-40",
+      "currentReading": "",
+      "date": "2026-08-17",
+      "id": "mswwm61w2p8g2a",
+      "mtagEntryId": "mswwm61wgigs5n",
+      "nextReading": "",
+      "notes": "M-Tag Recharge",
+      "status": "Paid",
+      "type": "M-Tag",
+      "vehicle": "AFX-196",
+      "vendor": "Jazz Cash Online",
+      "vendorAddress": ""
+    },
+    {
+      "amount": 58520,
+      "batchDetails": [
+        {
+          "batchId": "mt15n2gm16e5y8",
+          "cost": 12700,
+          "date": "2026-08-18",
+          "driver": "Muhammad Zubair",
+          "fuelAverage": "8.15 km/L",
+          "fuelType": "DIESEL",
+          "id": "mt15n2gmfcrb23",
+          "litres": 32.38,
+          "odometer": 25939,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 392.22,
+          "vehicle": "Hyundai Porter (CAV-8213)"
+        },
+        {
+          "batchId": "mt15n2gm16e5y8",
+          "cost": 7230,
+          "date": "2026-08-18",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "9.74 km/L",
+          "fuelType": "PETROL",
+          "id": "mt15n2gmt75wm5",
+          "litres": 21.67,
+          "odometer": 166679,
+          "pumpName": "Euro Sundar Estate",
+          "rate": 333.6,
+          "vehicle": "Toyota Yaris (LEB-5449)"
+        },
+        {
+          "batchId": "mt15n2gm16e5y8",
+          "cost": 4410,
+          "date": "2026-08-19",
+          "driver": "Muhammad Zubair",
+          "fuelAverage": "6.18 km/L",
+          "fuelType": "PETROL",
+          "id": "mt15n2gmigl65x",
+          "litres": 13.11,
+          "odometer": 63513,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 336.34,
+          "vehicle": "Suzuki Ravi (CAJ-6701)"
+        },
+        {
+          "batchId": "mt15n2gm16e5y8",
+          "cost": 11780,
+          "date": "2026-08-19",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "8.17 km/L",
+          "fuelType": "PETROL",
+          "id": "mt15n2gm6x8zzp",
+          "litres": 35.02,
+          "odometer": 12820,
+          "pumpName": "PSO Sundar EstatePSO Sundar Estate",
+          "rate": 336.34,
+          "vehicle": "Changan Carwan (BPR-980)"
+        },
+        {
+          "batchId": "mt15n2gm16e5y8",
+          "cost": 20400,
+          "date": "2026-08-19",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "5.55 km/L",
+          "fuelType": "PETROL",
+          "id": "mt15n2gm7zcsv3",
+          "litres": 57.46,
+          "odometer": 45865,
+          "pumpName": "PSO Sundar Estate",
+          "rate": 355,
+          "vehicle": "EF-55"
+        },
+        {
+          "batchId": "mt15n2gm16e5y8",
+          "cost": 2000,
+          "date": "2026-08-18",
+          "driver": "Sharaz",
+          "fuelAverage": "—",
+          "fuelType": "PETROL",
+          "id": "mt15n2gmb738v2",
+          "litres": 5.99,
+          "odometer": 1,
+          "pumpName": "Euro Sundar Estate",
+          "rate": 333.6,
+          "vehicle": "Honda CD-70 (AXF-2378)"
+        }
+      ],
+      "billNo": "VFP-A-41",
+      "date": "2026-08-18",
+      "fuelBatch": true,
+      "fuelBatchId": "mt15n2gm16e5y8",
+      "id": "mt15n2gm16e5y8",
+      "notes": "Hyundai Porter (CAV-8213) [PSO Sundar Estate]: 32.38L × PKR 392.22/L = PKR 12,700 | Toyota Yaris (LEB-5449) [Euro Sundar Estate]: 21.67L × PKR 333.6/L = PKR 7,230 | Suzuki Ravi (CAJ-6701) [PSO Sundar Estate]: 13.11L × PKR 336.34/L = PKR 4,410 | Changan Carwan (BPR-980) [PSO Sundar EstatePSO Sundar Estate]: 35.02L × PKR 336.34/L = PKR 11,780 | EF-55 [PSO Sundar Estate]: 57.46L × PKR 355/L = PKR 20,400 | Honda CD-70 (AXF-2378) [Euro Sundar Estate]: 5.99L × PKR 333.6/L = PKR 2,000",
+      "pumpName": "PSO Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hyundai Porter (CAV-8213)",
+      "vendor": "PSO Sundar Estate"
+    },
+    {
+      "amount": 1600,
+      "billNo": "VFP-A-42",
+      "currentReading": "",
+      "date": "2026-08-18",
+      "driver": "Tanveer Abbas",
+      "id": "mt1b7f7d5s89d5",
+      "nextReading": "",
+      "notes": "Vehicle Grease / Tyre Air Filling / Cleaning Air Filter / Radiator Cleaning",
+      "referenceId": "mt1b7f7d4z3wdz",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "Shahzad TyreShop",
+      "vendorAddress": "Raiwind Road Lahore"
+    },
+    {
+      "amount": 4400,
+      "batchDetails": [
+        {
+          "batchId": "mt15pkgrkkeiho",
+          "cost": 4400,
+          "date": "2026-08-19",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "13.76 km/L",
+          "fuelType": "PETROL",
+          "id": "mt15pkgswuhytm",
+          "litres": 13.08,
+          "odometer": 63767,
+          "pumpName": "Euro Sundar Estate",
+          "rate": 336.34,
+          "vehicle": "Suzuki Wagon-R (ARQ-334)"
+        }
+      ],
+      "billNo": "VFP-A-43",
+      "date": "2026-08-19",
+      "fuelBatch": true,
+      "fuelBatchId": "mt15pkgrkkeiho",
+      "id": "mt15pkgrkkeiho",
+      "notes": "Suzuki Wagon-R (ARQ-334) [Euro Sundar Estate]: 13.08L × PKR 336.34/L = PKR 4,400",
+      "pumpName": "Euro Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Suzuki Wagon-R (ARQ-334)",
+      "vendor": "Euro Sundar Estate"
+    },
+    {
+      "amount": 17100,
+      "batchDetails": [
+        {
+          "batchId": "mt15t7bc8j3f7b",
+          "cost": 17100,
+          "date": "2026-08-20",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "8.56 km/L",
+          "fuelType": "DIESEL",
+          "id": "mt15t7bcjb1sgk",
+          "litres": 46.87,
+          "odometer": 184480,
+          "pumpName": "Euro Sundar Estate",
+          "rate": 364.86,
+          "vehicle": "Hyundai Porter (CAF-4893)"
+        }
+      ],
+      "billNo": "VFP-A-44",
+      "date": "2026-08-20",
+      "fuelBatch": true,
+      "fuelBatchId": "mt15t7bc8j3f7b",
+      "id": "mt15t7bc8j3f7b",
+      "notes": "Hyundai Porter (CAF-4893) [Euro Sundar Estate]: 46.87L × PKR 364.86/L = PKR 17,100",
+      "pumpName": "Euro Sundar Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hyundai Porter (CAF-4893)",
+      "vendor": "Euro Sundar Estate"
+    },
+    {
+      "amount": 5010,
+      "billNo": "VFP-A-45",
+      "currentReading": "",
+      "date": "2026-08-20",
+      "id": "mt2kwi4fc4lvul",
+      "mtagEntryId": "mt2kwi4f6j3shb",
+      "nextReading": "",
+      "notes": "M-Tag Recharge",
+      "status": "Paid",
+      "type": "M-Tag",
+      "vehicle": "LES-4605",
+      "vendor": "Jazz Cash Online",
+      "vendorAddress": ""
+    },
+    {
+      "amount": 800,
+      "billNo": "VFP-A-46",
+      "currentReading": "",
+      "date": "2026-08-21",
+      "driver": "Tanveer Abbas",
+      "id": "mt2l1ce06c4ge9",
+      "nextReading": "",
+      "notes": "Tyre Puncture (Cut Pice)",
+      "referenceId": "mt2l1ce0lw9dol",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Hyundai Porter (CAF-4893)",
+      "vendor": "Mian Tyre Shop",
+      "vendorAddress": "Sunder Estate"
+    },
+    {
+      "amount": 3010,
+      "billNo": "VFP-A-47",
+      "currentReading": "",
+      "date": "2026-08-21",
+      "id": "mt2lj6pj1146w7",
+      "mtagEntryId": "mt2lj6pjlgmptc",
+      "nextReading": "",
+      "notes": "M Tag Recharge",
+      "status": "Paid",
+      "type": "M-Tag",
+      "vehicle": "CAF-21-4893",
+      "vendor": "Jazz Cash Online",
+      "vendorAddress": ""
+    },
+    {
+      "amount": 41850,
+      "batchDetails": [
+        {
+          "batchId": "mt3zvws3zytxb0",
+          "cost": 14700,
+          "date": "2026-08-22",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "6.75 km/L",
+          "fuelType": "DIESEL",
+          "id": "mt3zvws33nrcs8",
+          "litres": 39.72,
+          "odometer": 184748,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 370.14,
+          "vehicle": "Hyundai Porter (CAF-4893)"
+        },
+        {
+          "batchId": "mt3zvws3zytxb0",
+          "cost": 13150,
+          "date": "2026-08-22",
+          "driver": "Saeed Muhammad",
+          "fuelAverage": "6.14 km/L",
+          "fuelType": "DIESEL",
+          "id": "mt3zvws3a1vj48",
+          "litres": 35.52,
+          "odometer": 26157,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 370.14,
+          "vehicle": "Hyundai Porter (CAV-8213)"
+        },
+        {
+          "batchId": "mt3zvws3zytxb0",
+          "cost": 14000,
+          "date": "2026-08-22",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "10.35 km/L",
+          "fuelType": "PETROL",
+          "id": "mt3zvws34633s3",
+          "litres": 40.76,
+          "odometer": 13242,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 343.44,
+          "vehicle": "Changan Carwan (BPR-980)"
+        }
+      ],
+      "billNo": "VFP-A-48",
+      "date": "2026-08-22",
+      "fuelBatch": true,
+      "fuelBatchId": "mt3zvws3zytxb0",
+      "id": "mt3zvws3zytxb0",
+      "notes": "Hyundai Porter (CAF-4893) [PSO Sunder Estate]: 39.72L × PKR 370.14/L = PKR 14,700 | Hyundai Porter (CAV-8213) [PSO Sunder Estate]: 35.52L × PKR 370.14/L = PKR 13,150 | Changan Carwan (BPR-980) [PSO Sunder Estate]: 40.76L × PKR 343.44/L = PKR 14,000",
+      "pumpName": "PSO Sunder Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hyundai Porter (CAF-4893)",
+      "vendor": "PSO Sunder Estate"
+    },
+    {
+      "amount": 43560,
+      "batchDetails": [
+        {
+          "batchId": "mt4045yjm8a9qj",
+          "cost": 24700,
+          "date": "2026-08-22",
+          "driver": "Tanveer Abbas",
+          "fuelAverage": "5.99 km/L",
+          "fuelType": "DIESEL",
+          "id": "mt4045ykchi5hp",
+          "litres": 66.73,
+          "odometer": 231227,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 370.14,
+          "vehicle": "Hino (LES-4605)"
+        },
+        {
+          "batchId": "mt4045yjm8a9qj",
+          "cost": 10160,
+          "date": "2026-08-22",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "15.18 km/L",
+          "fuelType": "PETROL",
+          "id": "mt4045ykx2nds9",
+          "litres": 29.58,
+          "odometer": 38642,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 343.44,
+          "vehicle": "Suzuki Every (AVX-481)"
+        },
+        {
+          "batchId": "mt4045yjm8a9qj",
+          "cost": 4700,
+          "date": "2026-08-22",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "10.23 km/L",
+          "fuelType": "PETROL",
+          "id": "mt4045yka0cl03",
+          "litres": 13.68,
+          "odometer": 166819,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 343.44,
+          "vehicle": "Toyota Yaris (LEB-5449)"
+        },
+        {
+          "batchId": "mt4045yjm8a9qj",
+          "cost": 4000,
+          "date": "2026-08-22",
+          "driver": "Muhammad Ashfaq",
+          "fuelAverage": "7.38 km/L",
+          "fuelType": "PETROL",
+          "id": "mt4045yk7u6q5z",
+          "litres": 11.65,
+          "odometer": 63599,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 343.44,
+          "vehicle": "Suzuki Ravi (CAJ-6701)"
+        }
+      ],
+      "billNo": "VFP-A-49",
+      "date": "2026-08-22",
+      "fuelBatch": true,
+      "fuelBatchId": "mt4045yjm8a9qj",
+      "id": "mt4045yjm8a9qj",
+      "notes": "Hino (LES-4605) [PSO Sunder Estate]: 66.73L × PKR 370.14/L = PKR 24,700 | Suzuki Every (AVX-481) [PSO Sunder Estate]: 29.58L × PKR 343.44/L = PKR 10,160 | Toyota Yaris (LEB-5449) [PSO Sunder Estate]: 13.68L × PKR 343.44/L = PKR 4,700 | Suzuki Ravi (CAJ-6701) [PSO Sunder Estate]: 11.65L × PKR 343.44/L = PKR 4,000",
+      "pumpName": "PSO Sunder Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "PSO Sunder Estate"
+    },
+    {
+      "amount": 8250,
+      "batchDetails": [
+        {
+          "batchId": "mt405rb0v8zh3k",
+          "cost": 5300,
+          "date": "2026-08-22",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "mt407mt5mgeuny",
+          "litres": 15.43,
+          "odometer": 63999,
+          "pumpName": "",
+          "rate": 343.44,
+          "vehicle": "Suzuki Wagon-R (ARQ-334)"
+        },
+        {
+          "batchId": "mt405rb0v8zh3k",
+          "cost": 2950,
+          "date": "2026-08-22",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "mt407mt5gmnflk",
+          "litres": 8.59,
+          "odometer": 41125,
+          "pumpName": "",
+          "rate": 343.44,
+          "vehicle": "Suzuki Wagon-R (ARQ-526)"
+        }
+      ],
+      "billNo": "VFP-A-50",
+      "date": "2026-08-22",
+      "fuelBatch": true,
+      "fuelBatchId": "mt405rb0v8zh3k",
+      "id": "mt405rb0v8zh3k",
+      "notes": "Suzuki Wagon-R (ARQ-334): 15.43L × PKR 343.44/L = PKR 5,300 | Suzuki Wagon-R (ARQ-526): 8.59L × PKR 343.44/L = PKR 2,950",
+      "pumpName": "",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Suzuki Wagon-R (ARQ-334)",
+      "vendor": "Fuel Voucher (2 Vehicles)"
+    },
+    {
+      "amount": 6855,
+      "billNo": "VFP-A-51",
+      "currentReading": "324360",
+      "date": "2026-08-22",
+      "driver": "Hafiz Usama Noor",
+      "id": "mt72pfaf7u7znt",
+      "nextReading": "328360",
+      "notes": "Engine Oil / Air Filter / Oil Filter Change",
+      "referenceId": "mt72pfaf02v4o0",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Toyota GLI (LEA-6860)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rhabar"
+    },
+    {
+      "amount": 4000,
+      "batchDetails": [
+        {
+          "batchId": "mt84yk9qb0mhso",
+          "cost": 2000,
+          "date": "2026-08-23",
+          "driver": "Azam",
+          "fuelAverage": "—",
+          "fuelType": "PETROL",
+          "id": "mt84yk9qowikaj",
+          "litres": 5.82,
+          "odometer": 1,
+          "pumpName": "Euro Sunder Estate",
+          "rate": 343.99,
+          "vehicle": "Honda CD-70 (AKN-8859)"
+        },
+        {
+          "batchId": "mt84yk9qb0mhso",
+          "cost": 2000,
+          "date": "2026-08-22",
+          "driver": "Usman",
+          "fuelAverage": "—",
+          "fuelType": "PETROL",
+          "id": "mt84yk9q2c608b",
+          "litres": 5.82,
+          "odometer": 1,
+          "pumpName": "Euro Sunder Estate",
+          "rate": 343.99,
+          "vehicle": "honda CD-70 (LEL-9190)"
+        }
+      ],
+      "billNo": "VFP-A-52",
+      "date": "2026-08-23",
+      "fuelBatch": true,
+      "fuelBatchId": "mt84yk9qb0mhso",
+      "id": "mt84yk9qb0mhso",
+      "notes": "Honda CD-70 (AKN-8859) [Euro Sunder Estate]: 5.82L × PKR 343.99/L = PKR 2,000 | honda CD-70 (LEL-9190) [Euro Sunder Estate]: 5.82L × PKR 343.99/L = PKR 2,000",
+      "pumpName": "Euro Sunder Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Honda CD-70 (AKN-8859)",
+      "vendor": "Euro Sunder Estate"
+    },
+    {
+      "amount": 34842,
+      "billNo": "VFP-A-53",
+      "currentReading": "231366",
+      "date": "2026-08-24",
+      "driver": "Tanveer Abbas",
+      "id": "mt83r4rnwk99qw",
+      "nextReading": "235366",
+      "notes": "Engine Oil / Kerosene Oil / Vehicle Grease / Oil Filter / Brake Washer / Hino Coolant (4 L) / Wheel Greasing Labour / Labour",
+      "referenceId": "mt83r4rmvmgtr1",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "Lahore Central Motors (Pvt) Limited",
+      "vendorAddress": "19 KM Multan Road , Lahore"
+    },
+    {
+      "amount": 11161,
+      "billNo": "VFP-A-54",
+      "currentReading": "184900",
+      "date": "2026-08-24",
+      "driver": "Saeed Muhammad",
+      "id": "mt84czt8mkwe06",
+      "nextReading": "188900",
+      "notes": "Engine Oil / Oil Filter / Air Filter",
+      "referenceId": "mt84czt8a3p4m0",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Hyundai Porter (CAF-4893)",
+      "vendor": "Makki Oil  Store",
+      "vendorAddress": "opposite DHA Rhabar"
+    },
+    {
+      "amount": 7650,
+      "billNo": "VFP-A-55",
+      "currentReading": "252200",
+      "date": "2026-08-24",
+      "driver": "Muhammad Ashfaq",
+      "id": "mt84k7r9rdkepq",
+      "nextReading": "256200",
+      "notes": "Engine Oil / Oil Filter / Air Filter",
+      "referenceId": "mt84k7r96oakcf",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "Suzuki Cultus (LEB-1197)",
+      "vendor": "Makki Oil Store",
+      "vendorAddress": "Opposite DHA Rahbar"
+    },
+    {
+      "amount": 1500,
+      "billNo": "VFP-A-56",
+      "currentReading": "",
+      "date": "2026-08-25",
+      "driver": "Muhammad Ashfaq",
+      "id": "mt84mjyy0fxiy8",
+      "nextReading": "",
+      "notes": "Silicon , Rubbar , Labour",
+      "referenceId": "mt84mjyyrrze1j",
+      "status": "Paid",
+      "type": "Maintenance",
+      "vehicle": "EF-55",
+      "vendor": "AL- FLAH MOTORS",
+      "vendorAddress": "Raiwind"
+    },
+    {
+      "amount": 24720,
+      "batchDetails": [
+        {
+          "batchId": "mt895c0ekg967r",
+          "cost": 6800,
+          "date": "2026-08-25",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "11.93 km/L",
+          "fuelType": "PETROL",
+          "id": "mt895c0fjhh3ds",
+          "litres": 19.78,
+          "odometer": 167055,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 343.83,
+          "vehicle": "Toyota Yaris (LEB-5449)"
+        },
+        {
+          "batchId": "mt895c0ekg967r",
+          "cost": 6800,
+          "date": "2026-08-25",
+          "driver": "Muhammad Zubair",
+          "fuelAverage": "First",
+          "fuelType": "PETROL",
+          "id": "mt895c0f0tl9iw",
+          "litres": 19.78,
+          "odometer": 215359,
+          "pumpName": "Euro Sunder Estate",
+          "rate": 343.83,
+          "vehicle": "Toyota Vitz (LE-3153)"
+        },
+        {
+          "batchId": "mt895c0ekg967r",
+          "cost": 11120,
+          "date": "2026-08-25",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "9.03 km/L",
+          "fuelType": "PETROL",
+          "id": "mt895c0fkf9the",
+          "litres": 32.35,
+          "odometer": 13534,
+          "pumpName": "Euro Sunder Estate",
+          "rate": 343.83,
+          "vehicle": "Changan Carwan (BPR-980)"
+        }
+      ],
+      "billNo": "VFP-A-57",
+      "date": "2026-08-25",
+      "fuelBatch": true,
+      "fuelBatchId": "mt895c0ekg967r",
+      "id": "mt895c0ekg967r",
+      "notes": "Toyota Yaris (LEB-5449) [PSO Sunder Estate]: 19.78L × PKR 343.83/L = PKR 6,800 | Toyota Vitz (LE-3153) [Euro Sunder Estate]: 19.78L × PKR 343.83/L = PKR 6,800 | Changan Carwan (BPR-980) [Euro Sunder Estate]: 32.35L × PKR 343.83/L = PKR 11,120",
+      "pumpName": "PSO Sunder Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Toyota Yaris (LEB-5449)",
+      "vendor": "PSO Sunder Estate"
+    },
+    {
+      "amount": 4100,
+      "batchDetails": [
+        {
+          "batchId": "mt896fel0gmodu",
+          "cost": 4100,
+          "date": "2026-08-25",
+          "driver": "Saeed Muhammad",
+          "fuelAverage": "15.77 km/L",
+          "fuelType": "PETROL",
+          "id": "mt896felings0g",
+          "litres": 11.92,
+          "odometer": 41313,
+          "pumpName": "Euro Sunder Estate",
+          "rate": 343.83,
+          "vehicle": "Suzuki Wagon-R (ARQ-526)"
+        }
+      ],
+      "billNo": "VFP-A-58",
+      "date": "2026-08-25",
+      "fuelBatch": true,
+      "fuelBatchId": "mt896fel0gmodu",
+      "id": "mt896fel0gmodu",
+      "notes": "Suzuki Wagon-R (ARQ-526) [Euro Sunder Estate]: 11.92L × PKR 343.83/L = PKR 4,100",
+      "pumpName": "Euro Sunder Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Suzuki Wagon-R (ARQ-526)",
+      "vendor": "Euro Sunder Estate"
+    },
+    {
+      "amount": 52840,
+      "batchDetails": [
+        {
+          "batchId": "mtb5jf0qi33ag7",
+          "cost": 24890,
+          "date": "2026-08-27",
+          "driver": "Hafiz Usama Noor",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "mtb5w9a7s2vccz",
+          "litres": 68.2,
+          "odometer": 46510,
+          "pumpName": "",
+          "rate": 365,
+          "vehicle": "EF-55"
+        },
+        {
+          "batchId": "mtb5jf0qi33ag7",
+          "cost": 8950,
+          "date": "2026-08-27",
+          "driver": "Saeed Muhammad",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "mtb5w9a7de21jy",
+          "litres": 25.95,
+          "odometer": 85399,
+          "pumpName": "",
+          "rate": 344.95,
+          "vehicle": "Suzuki Bolan (AFS-612)"
+        },
+        {
+          "batchId": "mtb5jf0qi33ag7",
+          "cost": 10000,
+          "date": "2026-08-27",
+          "driver": "Muhammad Zubair",
+          "fuelAverage": "—",
+          "fuelType": "DIESEL",
+          "id": "mtb5w9a7d7g9gx",
+          "litres": 26.76,
+          "odometer": 26394,
+          "pumpName": "",
+          "rate": 373.65,
+          "vehicle": "Hyundai Porter (CAV-8213)"
+        },
+        {
+          "batchId": "mtb5jf0qi33ag7",
+          "cost": 9000,
+          "date": "2026-08-27",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "",
+          "fuelType": "PETROL",
+          "id": "mtb5w9a7ncgp0i",
+          "litres": 26.09,
+          "odometer": 39021,
+          "pumpName": "",
+          "rate": 344.95,
+          "vehicle": "Suzuki Every (AVX-481)"
+        }
+      ],
+      "billNo": "VFP-A-59",
+      "date": "2026-08-27",
+      "fuelBatch": true,
+      "fuelBatchId": "mtb5jf0qi33ag7",
+      "id": "mtb5jf0qi33ag7",
+      "notes": "EF-55: 68.2L × PKR 365/L = PKR 24,890 | Suzuki Bolan (AFS-612): 25.95L × PKR 344.95/L = PKR 8,950 | Hyundai Porter (CAV-8213): 26.76L × PKR 373.65/L = PKR 10,000 | Suzuki Every (AVX-481): 26.09L × PKR 344.95/L = PKR 9,000",
+      "pumpName": "",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "EF-55",
+      "vendor": "Fuel Voucher (4 Vehicles)"
+    },
+    {
+      "amount": 45620,
+      "batchDetails": [
+        {
+          "batchId": "mtb5qy50z1gdgx",
+          "cost": 20500,
+          "date": "2026-08-27",
+          "driver": "Tanveer Abbas",
+          "fuelAverage": "6.84 km/L",
+          "fuelType": "DIESEL",
+          "id": "mtb5qy51386bx6",
+          "litres": 54.86,
+          "odometer": 231602,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 373.65,
+          "vehicle": "Hino (LES-4605)"
+        },
+        {
+          "batchId": "mtb5qy50z1gdgx",
+          "cost": 17560,
+          "date": "2026-08-27",
+          "driver": "Muhammad Zubair",
+          "fuelAverage": "8.17 km/L",
+          "fuelType": "DIESEL",
+          "id": "mtb5qy51ys07t0",
+          "litres": 47,
+          "odometer": 185132,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 373.65,
+          "vehicle": "Hyundai Porter (CAF-4893)"
+        },
+        {
+          "batchId": "mtb5qy50z1gdgx",
+          "cost": 5560,
+          "date": "2026-08-27",
+          "driver": "Muhammad Zubair",
+          "fuelAverage": "7.82 km/L",
+          "fuelType": "PETROL",
+          "id": "mtb5qy51ah1gs5",
+          "litres": 16.12,
+          "odometer": 63725,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 344.95,
+          "vehicle": "Suzuki Ravi (CAJ-6701)"
+        },
+        {
+          "batchId": "mtb5qy50z1gdgx",
+          "cost": 2000,
+          "date": "2026-08-26",
+          "driver": "Shahbaz",
+          "fuelAverage": "—",
+          "fuelType": "PETROL",
+          "id": "mtb5qy51vu983g",
+          "litres": 5.79,
+          "odometer": 1,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 344.95,
+          "vehicle": "Honda CD-70 (AXF-2378)"
+        }
+      ],
+      "billNo": "VFP-A-60",
+      "date": "2026-08-27",
+      "fuelBatch": true,
+      "fuelBatchId": "mtb5qy50z1gdgx",
+      "id": "mtb5qy50z1gdgx",
+      "notes": "Hino (LES-4605) [PSO Sunder Estate]: 54.86L × PKR 373.65/L = PKR 20,500 | Hyundai Porter (CAF-4893) [PSO Sunder Estate]: 47L × PKR 373.65/L = PKR 17,560 | Suzuki Ravi (CAJ-6701) [PSO Sunder Estate]: 16.12L × PKR 344.95/L = PKR 5,560 | Honda CD-70 (AXF-2378) [PSO Sunder Estate]: 5.79L × PKR 344.95/L = PKR 2,000",
+      "pumpName": "PSO Sunder Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Hino (LES-4605)",
+      "vendor": "PSO Sunder Estate"
+    },
+    {
+      "amount": 13200,
+      "batchDetails": [
+        {
+          "batchId": "mtb5tif5lt6i96",
+          "cost": 8800,
+          "date": "2026-08-27",
+          "driver": "Saeed Muhammad",
+          "fuelAverage": "13.84 km/L",
+          "fuelType": "PETROL",
+          "id": "mtb5tif53u1kju",
+          "litres": 25.51,
+          "odometer": 64352,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 344.95,
+          "vehicle": "Suzuki Wagon-R (ARQ-334)"
+        },
+        {
+          "batchId": "mtb5tif5lt6i96",
+          "cost": 4400,
+          "date": "2026-08-27",
+          "driver": "Muhammad Masood Nawaz",
+          "fuelAverage": "14.89 km/L",
+          "fuelType": "PETROL",
+          "id": "mtb5tif51vzg9v",
+          "litres": 12.76,
+          "odometer": 41503,
+          "pumpName": "PSO Sunder Estate",
+          "rate": 344.95,
+          "vehicle": "Suzuki Wagon-R (ARQ-526)"
+        }
+      ],
+      "billNo": "VFP-A-61",
+      "date": "2026-08-27",
+      "fuelBatch": true,
+      "fuelBatchId": "mtb5tif5lt6i96",
+      "id": "mtb5tif5lt6i96",
+      "notes": "Suzuki Wagon-R (ARQ-334) [PSO Sunder Estate]: 25.51L × PKR 344.95/L = PKR 8,800 | Suzuki Wagon-R (ARQ-526) [PSO Sunder Estate]: 12.76L × PKR 344.95/L = PKR 4,400",
+      "pumpName": "PSO Sunder Estate",
+      "status": "Paid",
+      "type": "Fuel",
+      "vehicle": "Suzuki Wagon-R (ARQ-334)",
+      "vendor": "PSO Sunder Estate"
+    }
+  ],
+  "downloadHistory": [
+    {
+      "amount": "PKR 6,855",
+      "billNo": "VFP-A-51",
+      "downloadedAt": "2026-08-24T10:09:32.181Z",
+      "id": "mt72qtxxv373fq",
+      "type": "Maintenance",
+      "vehicle": "LEA-6860"
+    },
+    {
+      "amount": "PKR 0",
+      "billNo": "-",
+      "downloadedAt": "2026-08-03T05:51:46.522Z",
+      "id": "msctagka25wzv6",
+      "type": "-",
+      "vehicle": "-"
+    }
+  ],
+  "ledger": [
+    {
+      "amount": 30000,
+      "date": "2026-08-27",
+      "desc": "Usama to Amount Received",
+      "id": "mtb5010x3ixgt5",
+      "pendingAmt": 0,
+      "totalBill": 0,
+      "type": "Received"
+    },
+    {
+      "amount": 100000,
+      "date": "2026-08-27",
+      "desc": "Receive Amount to waqas",
+      "id": "mtb50u4ouiqm1t",
+      "pendingAmt": 0,
+      "totalBill": 0,
+      "type": "Received"
+    },
+    {
+      "amount": 30000,
+      "date": "2026-08-24",
+      "desc": "Tanveer Abbas Amount Received",
+      "id": "mt848qewepxk9k",
+      "pendingAmt": 0,
+      "totalBill": 0,
+      "type": "Received"
+    },
+    {
+      "amount": 100000,
+      "date": "2026-08-22",
+      "desc": "Received Amount",
+      "id": "mt409x0fuxbny3",
+      "pendingAmt": 0,
+      "totalBill": 0,
+      "type": "Received"
+    },
+    {
+      "amount": 100000,
+      "date": "2026-08-21",
+      "desc": "Amount Received",
+      "id": "mt2kriimiio62c",
+      "pendingAmt": 0,
+      "totalBill": 0,
+      "type": "Received"
+    },
+    {
+      "amount": 188000,
+      "date": "2026-08-20",
+      "desc": "Bill returned To saddique Sb (Painding/58000)",
+      "id": "mt1dt6n6b7tnja",
+      "pendingAmt": 0,
+      "totalBill": 0,
+      "type": "Returned"
+    },
+    {
+      "amount": "50000",
+      "date": "2026-08-17",
+      "desc": "Received Waqas",
+      "id": "mswruxj44oz6zi",
+      "type": "Received"
+    },
+    {
+      "amount": "15000",
+      "date": "2026-08-17",
+      "desc": "Amount Online Receive",
+      "id": "mswus19aidhmeg",
+      "type": "Received"
+    },
+    {
+      "amount": "30000",
+      "date": "2026-08-15",
+      "desc": "Received From Ashfaq",
+      "id": "mswru40dd779q4",
+      "type": "Received"
+    },
+    {
+      "amount": "100000",
+      "date": "2026-08-13",
+      "desc": "Received Amount",
+      "id": "msws00l5fz9a71",
+      "type": "Received"
+    },
+    {
+      "amount": "222000",
+      "date": "2026-08-12",
+      "desc": "Returned Expence  Bill  to saddique sb",
+      "id": "msq24z4nj8angl",
+      "type": "Returned"
+    },
+    {
+      "amount": "3000",
+      "date": "2026-08-12",
+      "desc": "jazz cash",
+      "id": "msq260dzmc7xwj",
+      "type": "Received"
+    },
+    {
+      "amount": "100000",
+      "date": "2026-08-11",
+      "desc": "Reason To Fuel Filling",
+      "id": "msoa16sp8e53gl",
+      "type": "Received"
+    },
+    {
+      "amount": "100000",
+      "date": "2026-08-06",
+      "desc": "Reason to Fuel Filling",
+      "id": "msh1c8m8p5czrj",
+      "type": "Received"
+    },
+    {
+      "amount": "100000",
+      "date": "2026-08-05",
+      "desc": "Fuel Filling",
+      "id": "msfrjmlh0lq4j9",
+      "type": "Received"
+    },
+    {
+      "amount": "95000",
+      "date": "2026-08-05",
+      "desc": "Return  all Bill  to saddique sb",
+      "id": "msfx2n4w4bkgue",
+      "type": "Returned"
+    },
+    {
+      "amount": "65000",
+      "date": "2026-08-03",
+      "desc": "Fuel Filling",
+      "id": "msfrivhqckb5w1",
+      "type": "Received"
+    }
+  ],
+  "mtag": [
+    {
+      "accountNo": "-",
+      "assign": "-",
+      "balance": "5000",
+      "date": "2026-08-04",
+      "id": "mse5ayzhfypvz8",
+      "model": "-",
+      "plate": "CAF-4893",
+      "status": "Active",
+      "vehicleType": "Admin"
+    },
+    {
+      "billNo": "MT-2026-001",
+      "date": "2026-08-17",
+      "grandTotal": 5000,
+      "id": "mswwm61wgigs5n",
+      "notes": "M-Tag Recharge",
+      "period": "",
+      "status": "Paid",
+      "totalToll": 0,
+      "totalTopup": 5000,
+      "vehicles": [
+        {
+          "accountNo": "11354840",
+          "assign": "M-Tag Recharge",
+          "model": "2016",
+          "plate": "AFX-196",
+          "toll": 0,
+          "topup": 5000,
+          "vehicleType": "Admin"
+        }
+      ],
+      "vendor": "Jazz Cash Online"
+    },
+    {
+      "billNo": "MT-2026-002",
+      "date": "2026-08-20",
+      "grandTotal": 5010,
+      "id": "mt2kwi4f6j3shb",
+      "notes": "M-Tag Recharge",
+      "period": "",
+      "status": "Paid",
+      "totalToll": 0,
+      "totalTopup": 5010,
+      "vehicles": [
+        {
+          "accountNo": "12385320",
+          "assign": "M Tag Recharge",
+          "model": "2019",
+          "plate": "LES-4605",
+          "toll": 0,
+          "topup": 5010,
+          "vehicleType": "Admin"
+        }
+      ],
+      "vendor": "Jazz Cash Online"
+    },
+    {
+      "billNo": "MT-2026-003",
+      "date": "2026-08-21",
+      "grandTotal": 3010,
+      "id": "mt2lj6pjlgmptc",
+      "notes": "M Tag Recharge",
+      "period": "",
+      "status": "Paid",
+      "totalToll": 0,
+      "totalTopup": 3010,
+      "vehicles": [
+        {
+          "accountNo": "11360580",
+          "assign": "M Tag Recharge",
+          "model": "2021",
+          "plate": "CAF-21-4893",
+          "toll": 0,
+          "topup": 3010,
+          "vehicleType": "Admin"
+        }
+      ],
+      "vendor": "Jazz Cash Online"
+    }
+  ],
+  "settings": {
+    "companyAddress": "Plot# 363, 364 & 366 Sunder Industrial Estate, Raiwind",
+    "companyCity": "Lahore",
+    "companyName": "Vision Food & Packaging Lahore",
+    "firebase": {
+      "apiKey": "\"AIzaSyBbVxKnrdPCL27G-c0HAQAUdVqQBtKjTO8\",",
+      "authDomain": "\"my-project-vehicle-management.firebaseapp.com\",",
+      "databaseURL": "\"https://my-project-vehicle-management-default-rtdb.firebaseio.com\",",
+      "projectId": "\"my-project-vehicle-management\","
+    },
+    "password": "admin321",
+    "username": "admin"
+  }
+};
+    localStorage.setItem('vehiclehub_v5', JSON.stringify(recoveredData));
+    console.log("Recovery complete. Reloading...");
+    location.reload();
+  }
+})();

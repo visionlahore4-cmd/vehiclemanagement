@@ -340,6 +340,9 @@
         <button class="btn-primary" id="addMaintenanceBtn">+ Log Maintenance</button>
       </div>
       <div class="filter-bar">
+        <select id="maintenanceMonthSelect" class="filter-select" style="min-width:180px; font-weight:700; color:var(--text);" onchange="renderMaintenance()">
+          <option value="all">📁 All Months (Full History)</option>
+        </select>
         <input type="text" id="maintenanceSearch" class="filter-input" placeholder="Search by vehicle, type, notes…" oninput="renderMaintenance()" />
         <select id="maintenanceStatusFilter" class="filter-select" onchange="renderMaintenance()">
           <option value="">All Status</option>
@@ -561,6 +564,9 @@
         </button>
       </div>
       <div class="filter-bar">
+        <select id="mtagMonthSelect" class="filter-select" style="min-width:180px; font-weight:700; color:var(--text);" onchange="renderMTag()">
+          <option value="all">📁 All Months (Full History)</option>
+        </select>
         <input type="text" id="mtagSearch" class="filter-input" placeholder="Search by plate, account no or name..." oninput="renderMTag()" style="width: 320px;" />
         <select id="mtagTypeFilter" class="filter-input" onchange="renderMTag()" style="width:160px;">
           <option value="">All Types</option>
@@ -811,6 +817,7 @@
       <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
         <button id="tabBtnSummary" onclick="switchMonthlyTab('summary')" class="btn-primary" style="font-size:0.9rem; padding:8px 20px; background:#1e3a8a; border-color:#1e3a8a;">🚗 Vehicle Summary</button>
         <button id="tabBtnFuelDetail" onclick="switchMonthlyTab('fueldetail')" class="btn-secondary" style="font-size:0.9rem; padding:8px 20px;">⛽ Vehicle Fuel Details</button>
+        <button id="tabBtnMaintDetail" onclick="switchMonthlyTab('maintdetail')" class="btn-secondary" style="font-size:0.9rem; padding:8px 20px;">🔧 Vehicle Maintenance Details</button>
       </div>
 
       <!-- TAB 1: Vehicle-wise Summary Table -->
@@ -860,6 +867,26 @@
               oninput="filterFuelDetails()" />
           </div>
           <div id="fuelDetailsContainer">
+            <!-- Populated by JS: one mini-table per vehicle -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Per-Vehicle Maintenance Details -->
+      <div id="tabMaintDetail" style="display:none;">
+        <div class="section-card" style="background:var(--card); padding:24px; border-radius:16px; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid var(--border); margin-bottom:24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+            <h3 style="margin:0; font-size:1.2rem; font-weight:700; color:#1e3a8a;">🔧 Per-Vehicle Maintenance Details</h3>
+            <span style="font-size:0.85rem; color:var(--text-muted); font-weight:600;" id="maintDetailMonthLabel"></span>
+          </div>
+          <!-- Search Bar -->
+          <div style="margin-bottom:18px;">
+            <input type="text" id="maintDetailSearch"
+              placeholder="🔍 Vehicle number, type ya driver search karen... (e.g. LEA-6860)"
+              style="width:100%; max-width:380px; padding:10px 16px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:0.9rem; font-weight:600; color:#0f172a; background:var(--bg2); outline:none; box-sizing:border-box;"
+              oninput="filterMaintDetails()" />
+          </div>
+          <div id="maintDetailsContainer">
             <!-- Populated by JS: one mini-table per vehicle -->
           </div>
         </div>
