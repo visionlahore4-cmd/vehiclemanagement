@@ -3434,6 +3434,52 @@ function renderBills() {
     populateVehicleSelects('billVehicleFilter', '');
   }
 
+  // Populate Month Filter Dropdown
+  const monthSel = document.getElementById('billMonthSelect');
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  const curMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const curMonthName = MONTH_NAMES[now.getMonth()];
+  const curYear = now.getFullYear();
+  let selectedMonth = curMonthKey;
+
+  if (monthSel) {
+    const monthSet = new Set();
+    monthSet.add(curMonthKey);
+    state.bills.forEach(b => {
+      if (b.date) {
+        const d = new Date(b.date);
+        if (!isNaN(d.getTime())) {
+          monthSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+        }
+      }
+    });
+    const allMonths = [...monthSet].sort().reverse();
+    const prevVal = monthSel.value;
+
+    let optionsHtml = '';
+    optionsHtml += `<option value="${curMonthKey}">📅 Current Month (${curMonthName} ${curYear})</option>`;
+    optionsHtml += `<option value="all">📁 All Months (Full History)</option>`;
+
+    allMonths.forEach(m => {
+      if (m !== curMonthKey) {
+        const [y, mo] = m.split('-');
+        const mName = MONTH_NAMES[parseInt(mo, 10) - 1];
+        const count = state.bills.filter(b => b.date && b.date.startsWith(m)).length;
+        optionsHtml += `<option value="${m}">📁 ${mName} ${y} (${count} bills)</option>`;
+      }
+    });
+
+    monthSel.innerHTML = optionsHtml;
+    if (prevVal && (prevVal === 'all' || allMonths.includes(prevVal))) {
+      monthSel.value = prevVal;
+      selectedMonth = prevVal;
+    } else {
+      monthSel.value = curMonthKey;
+      selectedMonth = curMonthKey;
+    }
+  }
+
   const typeF = document.getElementById('billTypeFilter').value;
   const statusF = document.getElementById('billStatusFilter').value;
   const vehF = document.getElementById('billVehicleFilter').value;
@@ -3441,10 +3487,12 @@ function renderBills() {
   const sortOrder = document.getElementById('billSortOrder')?.value || 'desc';
 
   let list = state.bills.filter(b => {
-    return (!typeF || b.type === typeF) &&
+    const matchMonth = (selectedMonth === 'all') || (b.date && b.date.startsWith(selectedMonth));
+    return matchMonth &&
+           (!typeF || b.type === typeF) &&
            (!statusF || b.status === statusF) &&
            (!vehF || b.vehicle === vehF) &&
-           (!search || b.billNo.toLowerCase().includes(search) || b.vendor.toLowerCase().includes(search));
+           (!search || (b.billNo && b.billNo.toLowerCase().includes(search)) || (b.vendor && b.vendor.toLowerCase().includes(search)));
   });
 
   list.sort((a, b) => {
@@ -3488,7 +3536,21 @@ function renderBills() {
         </td>
       </tr>
     `;
-  }).join('') : `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🧾</div><p>No bills found</p></div></td></tr>`;
+  }).join('') : `
+    <tr>
+      <td colspan="9" style="text-align:center;padding:40px 20px;">
+        <div class="empty-state">
+          <div class="empty-icon">🧾</div>
+          <p style="font-weight:700;font-size:1.05rem;color:var(--text);margin-bottom:6px;">
+            ${selectedMonth === curMonthKey ? `${curMonthName} ${curYear} ka koi bill record nahi mila` : 'No bills found for this filter'}
+          </p>
+          <p style="font-size:0.85rem;color:var(--text-muted);">
+            📁 Pichlay mahinon ke bills dekhne ke liye dropdown se <a href="javascript:void(0)" onclick="document.getElementById('billMonthSelect').value='all';renderBills();" style="color:#2563eb;font-weight:700;text-decoration:underline;">All Months (Full History)</a> select karein.
+          </p>
+        </div>
+      </td>
+    </tr>
+  `;
 
   const statTotalEl = document.getElementById('bill-stat-total-pkr');
   if (statTotalEl) statTotalEl.textContent = fmtPKR(totalAmount);
@@ -4001,6 +4063,30 @@ function importAppData(event) {
   reader.readAsText(file);
   // Reset the input so the same file can be selected again if needed
   event.target.value = '';
+}
+
+function openAntigravity(type) {
+  try {
+    const url = (type === 'ide')
+      ? 'antigravity-ide://file/C:/Users/sukhera/Documents/project%20one'
+      : 'antigravity://';
+
+    const link = document.createElement('a');
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => link.remove(), 250);
+
+    const label = type === 'ide' ? 'Antigravity IDE (Code Editor)' : 'Google Antigravity AI';
+    if (typeof showToast === 'function') {
+      showToast(`Launching ${label}... 🚀`, 'info');
+    }
+  } catch (err) {
+    console.error('Error opening Antigravity:', err);
+    if (typeof showToast === 'function') {
+      showToast('Antigravity open nahi ho saka ❌', 'error');
+    }
+  }
 }
 
 function exportToExcel() {

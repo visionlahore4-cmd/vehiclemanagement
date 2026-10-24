@@ -450,6 +450,9 @@
 
       <!-- Filters -->
       <div class="filter-bar">
+        <select id="billMonthSelect" class="filter-select" onchange="renderBills()" style="min-width:200px;font-weight:700;color:var(--primary);">
+          <!-- Populated dynamically: Current Month (Default), All Months, etc. -->
+        </select>
         <select id="billTypeFilter" class="filter-select" onchange="renderBills()">
           <option value="">All Types</option>
           <option value="Fuel">Fuel Bill</option>
@@ -1037,6 +1040,33 @@
               </label>
             </div>
             <button type="button" class="btn-danger" onclick="resetAppData()" style="width:100%;">⚠️ Reset All Data</button>
+          </div>
+        </div>
+
+        <!-- Antigravity AI Assistant & IDE -->
+        <div class="card" style="padding:20px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;justify-content:space-between;">
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <h3 style="margin:0;color:var(--text);font-weight:700;display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1.3rem;">🚀</span> Google Antigravity
+              </h3>
+              <span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:0.72rem;padding:3px 9px;border-radius:12px;font-weight:700;letter-spacing:0.5px;">AI ASSISTANT</span>
+            </div>
+            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:15px;line-height:1.5;">
+              Yahan se aap <strong>Antigravity</strong> ko direct 1-click se open kar sakte hain taake AI assistant ke sath coding, nayi changes ya chat kar sakein.
+            </p>
+          </div>
+          <div>
+            <button type="button" class="btn-primary" onclick="openAntigravity('app')" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-bottom:10px;background:linear-gradient(135deg, #4f46e5, #7c3aed);border:none;padding:11px 16px;border-radius:8px;font-weight:700;cursor:pointer;color:#fff;box-shadow:0 4px 12px rgba(99,102,241,0.25);">
+              <span style="font-size:1.1rem;">⚡</span> Open Antigravity (AI App)
+            </button>
+            <button type="button" class="btn-secondary" onclick="openAntigravity('ide')" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;">
+              <span style="font-size:1.1rem;">💻</span> Open Project in Antigravity IDE
+            </button>
+            <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;justify-content:center;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;"></span>
+              1-Click Direct Launch Active
+            </div>
           </div>
         </div>
 
