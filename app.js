@@ -122,6 +122,15 @@ function saveState() {
   if (window.firebaseInitialized && window.firebaseDbRef) {
     window.firebaseDbRef.set(state);
   }
+
+  // Real-time local server sync
+  if (typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
+    fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    }).catch(function(e) {});
+  }
 }
 
 function migrateFuelBills() {
